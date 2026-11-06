@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Nuty → MusicXML</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <img src="icon.png" alt="" class="top__icon">
+  <div class="top__title">
+    <h1>Nuty → MusicXML</h1>
+    <p>PDF, skany i zdjęcia nut do pliku .musicxml</p>
+  </div>
+  <div class="top__right">
+    <div class="seg" id="engine" role="radiogroup" aria-label="Silnik">
+      <button data-v="audiveris">Audiveris</button>
+      <button data-v="oemer">oemer</button>
+      <button data-v="both">Oba (porównanie)</button>
+    </div>
+    <div class="badges">
+      <span class="badge" id="b-vector"><i></i>PDF wektorowy</span>
+      <span class="badge" id="b-audiveris"><i></i>Audiveris</span>
+      <span class="badge" id="b-oemer"><i></i>oemer</span>
+    </div>
+  </div>
+</header>
+
+<div class="banner" id="setup-banner" hidden>
+  <span>Do skanów i zdjęć potrzebne są silniki rozpoznawania nut (Audiveris, oemer). PDF-y z programów nutowych działają od razu.</span>
+  <button class="primary" data-act="open-settings">Zainstaluj silniki…</button>
+</div>
+
+<main id="drop" class="drop">
+  <div class="empty" id="empty">
+    <div class="empty__icon">♫</div>
+    <h2>Przeciągnij tutaj pliki PDF, JPG, PNG lub HEIC</h2>
+    <p>albo cały folder ze skanami — albo gotowy plik .musicxml / .mxl, żeby go od razu odsłuchać</p>
+    <button data-act="add">Wybierz pliki…</button>
+  </div>
+  <ul class="jobs" id="jobs" hidden></ul>
+</main>
+
+<section class="opts">
+  <label>Zapisz:
+    <select id="out-loc">
+      <option value="next">Obok pliku źródłowego</option>
+      <option value="folder">Wybrany folder</option>
+    </select>
+  </label>
+  <button id="out-folder" hidden>📁 <span>Wybierz folder…</span></button>
+  <span class="spacer"></span>
+  <label id="keep-mxl-wrap"><input type="checkbox" id="keep-mxl"> Zachowaj też .mxl</label>
+</section>
+
+<section class="log" id="log" hidden>
+  <div class="log__bar">
+    <b>Log</b><span id="log-count" class="muted"></span>
+    <span class="spacer"></span>
+    <button data-act="log-copy" title="Kopiuj cały log do schowka">⧉ Kopiuj</button>
+    <button data-act="log-save" title="Zapisz log do pliku .txt (Ctrl+Shift+S)">⭳ Zapisz…</button>
+    <button data-act="log-clear" title="Wyczyść log (Ctrl+K)">🗑 Wyczyść</button>
+  </div>
+  <div class="log__lines" id="log-lines"></div>
+</section>
+
+<footer class="bottom">
+  <button data-act="add">＋ Dodaj</button>
+  <button data-act="clear-list" id="btn-clear">Wyczyść listę</button>
+  <button data-act="reset" id="btn-reset" hidden>Konwertuj ponownie</button>
+  <button data-act="toggle-log" id="btn-log">Log ▴</button>
+  <button data-act="play-file" title="Odtwórz gotowy plik MusicXML (Ctrl+Shift+O)">▶ Odtwórz plik…</button>
+  <button data-act="open-settings" title="Ustawienia">⚙ Ustawienia</button>
+  <span class="spacer"></span>
+  <span class="missing" id="missing"></span>
+  <span class="spin" id="spin" hidden></span>
+  <button data-act="cancel" id="btn-cancel" hidden>Przerwij</button>
+  <button class="primary" data-act="start" id="btn-start" title="Ctrl+Enter">✦ Konwertuj</button>
+</footer>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>Ustawienia</h2>
+
+    <fieldset>
+      <legend>PDF z programu nutowego</legend>
+      <label><input type="checkbox" id="use-vector"> Czytaj nuty bezpośrednio z PDF, gdy to możliwe</label>
+      <p class="hint">PDF wyeksportowany z Finale, Sibeliusa, MuseScore itp. ma nuty zapisane jako dane, nie obraz — odczyt jest wtedy dokładny (nuty, rytm, tekst, akordy). Skany i zdjęcia idą przez Audiveris/oemer. Czytnik jest wbudowany w aplikację.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Audiveris</legend>
+      <div class="row"><span id="st-audiveris" class="st"></span>
+        <button type="button" data-install="audiveris">Zainstaluj / zaktualizuj</button>
+        <button type="button" data-choose="custom_audiveris">Wskaż Audiveris.exe…</button></div>
+      <label>Języki tekstu pod nutami (OCR): <input type="text" id="ocr-langs" size="14" placeholder="pol+eng"></label>
+      <div class="row"><span id="st-ocr" class="st"></span>
+        <button type="button" data-install="ocr">Pobierz języki (pol, eng, lat, deu)</button></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>oemer</legend>
+      <div class="row"><span id="st-oemer" class="st"></span>
+        <button type="button" data-install="oemer">Zainstaluj (ok. 400 MB)</button></div>
+      <label><input type="checkbox" id="deskew"> Prostowanie krzywych zdjęć (deskew)</label>
+      <label><input type="checkbox" id="merge-pages"> Łącz strony PDF w jeden plik</label>
+      <p class="hint">oemer nie odczytuje tekstu pod nutami — do tego służy Audiveris.</p>
+    </fieldset>
+
+    <div class="row end">
+      <button type="button" data-install="all" class="primary">Zainstaluj wszystko</button>
+      <span class="spacer"></span>
+      <button value="close">Zamknij</button>
+    </div>
+    <p class="hint" id="install-note" hidden>Instalacja trwa — postęp widać w logu na dole okna.</p>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

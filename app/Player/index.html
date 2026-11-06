@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="player.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<!--
+  The same player as in the chor-repertuar plugin (1.15.3): the markup matches
+  templates/single-utwor.php; player.js, sf2-player.js and player.css are copied unchanged from the plugin.
+  The only difference: no recorded backing track and no "Download PDF" button.
+-->
+<div class="cnr-utwor-wrap">
+  <div class="cnr-player" data-file-url="{{FILE_URL}}" data-format="{{FORMAT}}" data-audio-url="" data-soundfonts="[]" data-default-voice="choir_aahs" data-default-accomp="acoustic_grand_piano">
+    <div class="cnr-player__controls">
+      <div class="cnr-player__toolbar">
+        <button type="button" class="cnr-player__play">▶ Odtwórz</button>
+        <button type="button" class="cnr-player__stop">■ Zatrzymaj</button>
+        <button type="button" class="cnr-player__collapse-toggle" aria-expanded="true">
+          <span class="cnr-player__collapse-icon" aria-hidden="true">▾</span>
+          <span class="cnr-player__collapse-label">Zwiń sterowanie</span>
+        </button>
+      </div>
+      <div class="cnr-player__controls-extra">
+        <div class="cnr-player__toolbar">
+          <label class="cnr-player__tempo-label">
+            Tempo:
+            <input type="range" class="cnr-player__tempo" min="40" max="240" step="1" value="120">
+            <input type="number" class="cnr-player__tempo-number" min="20" max="400" step="1" value="120" inputmode="numeric" aria-label="Tempo w BPM — wpisz ręcznie">
+            <span class="cnr-player__tempo-unit">BPM</span>
+          </label>
+          <label class="cnr-player__volume-label">
+            Głośność:
+            <input type="range" class="cnr-player__master-volume" min="0" max="150" step="5" value="100">
+            <span class="cnr-player__master-volume-value">100%</span>
+          </label>
+          <button type="button" class="cnr-player__print">🖶 Drukuj</button>
+        </div>
+        <div class="cnr-player__status"></div>
+        <div class="cnr-player__voices"></div>
+        <div class="cnr-player__progress"><div class="cnr-player__progress-bar"></div></div>
+      </div>
+    </div>
+    <div class="cnr-player__score"></div>
+  </div>
+</div>
+<script src="vendor/opensheetmusicdisplay.min.js"></script>
+<script src="vendor/soundfont-player.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="sf2-player.js"></script>
+<script src="player.js"></script>
+</body>
+</html>
