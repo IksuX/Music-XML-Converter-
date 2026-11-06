@@ -58,7 +58,14 @@ jobs:
           path: dist/NutyMusicXML-Setup-*.exe
 
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          name: Nuty → MusicXML ${{ steps.ver.outputs.v }} (Windows)
+          body: |
+            Instalator dla Windows 10/11 (64-bit): pobierz **NutyMusicXML-Setup-${{ steps.ver.outputs.v }}.exe** z listy plików poniżej.
+
+            Windows może pokazać ostrzeżenie „System Windows ochronił ten komputer” (instalator nie jest podpisany) — kliknij **Więcej informacji → Uruchom mimo to**.
           files: dist/NutyMusicXML-Setup-*.exe

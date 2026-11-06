@@ -23,14 +23,13 @@ Brzmienia w odtwarzaczu pobierają się z internetu przy pierwszym odtworzeniu, 
 
 ## Budowanie instalatora
 
-**Automatycznie (GitHub Actions):** wrzuć ten folder do repozytorium na GitHubie. Przy każdym pushu na `main` workflow `.github/workflows/windows.yml` testuje, buduje i zostawia instalator w zakładce *Actions → (przebieg) → Artifacts*. Tag `v0.4.1` dodatkowo tworzy Release z plikiem `.exe`.
+**Automatycznie (GitHub Actions):** wrzuć ten folder do repozytorium na GitHubie. Przy każdym pushu na `main` workflow `.github/workflows/windows.yml` testuje, buduje i publikuje instalator w zakładce **Releases** (wydanie `v<wersja>` z `app/nuty/__init__.py`; ponowny push tej samej wersji podmienia plik). Nowa wersja = zmiana `__version__` i push.
 
 ```
 git init && git add . && git commit -m "Nuty MusicXML 0.4.1"
 git branch -M main
 git remote add origin https://github.com/<konto>/nuty-musicxml-windows.git
 git push -u origin main
-git tag v0.4.1 && git push --tags
 ```
 
 **Na własnym komputerze z Windows:** zainstaluj Python 3.11 (python.org) i Inno Setup 6, potem dwuklik `build.bat`. Wynik: `dist\NutyMusicXML-Setup-0.4.1.exe`.
