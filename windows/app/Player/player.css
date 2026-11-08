@@ -1,0 +1,690 @@
+.cnr-player {
+	max-width: 900px;
+	margin: 0 0 2em;
+	border: 1px solid #d8d8d8;
+	border-radius: 8px;
+	padding: 16px;
+	background: #fff;
+}
+
+/* Zabezpieczenie przed nieoczekiwanym poziomym przewijaniem na wąskich ekranach: elementy
+   o ustalonej szerokości (np. pola tempa) liczą ją WRAZ z paddingiem/obramowaniem, a nie
+   dodatkowo do niego. */
+.cnr-player,
+.cnr-player *,
+.cnr-player *::before,
+.cnr-player *::after {
+	box-sizing: border-box;
+}
+
+.cnr-player__controls {
+	/* "Zablokowany" pasek sterowania: zostaje przyklejony do góry ekranu podczas przewijania,
+	   a partytura (.cnr-player__score, poza tym kontenerem) przewija się pod nim w dół —
+	   patrz też auto-przewijanie do aktualnie odtwarzanego taktu w player.js. */
+	position: sticky;
+	top: 0;
+	z-index: 15;
+	background: #fff;
+	padding-bottom: 8px;
+	margin-bottom: 8px;
+	border-bottom: 1px solid #eee;
+}
+
+/* WordPress dolepia na górze stały pasek administracyjny (#wpadminbar) dla zalogowanych
+   użytkowników — bez tej poprawki nasz "zablokowany" pasek chowałby się częściowo pod nim. */
+.admin-bar .cnr-player__controls {
+	top: 32px;
+}
+
+@media screen and (max-width: 782px) {
+	.admin-bar .cnr-player__controls {
+		top: 46px;
+	}
+}
+
+/* Reszta panelu sterowania (tempo, głośność, mikser, pasek postępu) poza samym górnym rzędem
+   Odtwórz/Zatrzymaj/Zwiń — zwijana przyciskiem, patrz setupCollapseToggle w player.js. Chowana
+   przez display:none (a nie np. max-height), żeby zwinięty panel faktycznie nie zajmował miejsca
+   w układzie strony — to jest właśnie cel zwijania: uwolnić ekran dla partytury pod spodem. */
+.cnr-player__controls--collapsed .cnr-player__controls-extra {
+	display: none;
+}
+
+.cnr-player__collapse-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	/* Wypycha przycisk na prawą stronę górnego rzędu, z dala od Odtwórz/Zatrzymaj — mniejsza
+	   szansa na przypadkowe dotknięcie zamiast odtwarzania. */
+	margin-left: auto;
+}
+
+.cnr-player__collapse-icon {
+	font-size: 11px;
+}
+
+.cnr-player__toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding-top: 4px;
+}
+
+.cnr-player__toolbar button,
+.cnr-player__toolbar select {
+	padding: 6px 12px;
+	border: 1px solid #ccc;
+	border-radius: 5px;
+	background: #f7f7f7;
+	cursor: pointer;
+	font-size: 14px;
+}
+
+.cnr-player__toolbar button:disabled,
+.cnr-player__toolbar select:disabled,
+.cnr-player__toolbar input:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.cnr-player__download {
+	text-decoration: none;
+	color: inherit;
+}
+
+.cnr-player__tempo-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+}
+
+/* Suwak tempa nut I suwak tempa podkładu (patrz cnr-player__backing-tempo-label w szablonie)
+   mają celowo identyczny wygląd — to dwa NIEZALEŻNE suwaki (patrz komentarz przy
+   rebaseBackingTempo w player.js), różne tylko etykietą. */
+.cnr-player__tempo,
+.cnr-player__backing-tempo {
+	width: 120px;
+}
+
+/* Pole do ręcznego wpisania tempa, obok suwaka (patrz setupTempoControl w player.js) —
+   ta sama stylistyka dla tempa nut i tempa podkładu. */
+.cnr-player__tempo-number,
+.cnr-player__backing-tempo-number {
+	width: 3.6em;
+	padding: 4px 6px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 13px;
+	text-align: center;
+	/* Chrome/Firefox pokazują domyślnie strzałki góra/dół przy type="number" — suwak obok już
+	   pełni tę rolę, więc strzałki tylko zabierają miejsce bez realnej korzyści. */
+	-moz-appearance: textfield;
+}
+
+.cnr-player__tempo-number::-webkit-inner-spin-button,
+.cnr-player__tempo-number::-webkit-outer-spin-button,
+.cnr-player__backing-tempo-number::-webkit-inner-spin-button,
+.cnr-player__backing-tempo-number::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.cnr-player__tempo-unit {
+	color: #666;
+}
+
+.cnr-player__volume-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+}
+
+.cnr-player__master-volume {
+	width: 120px;
+}
+
+.cnr-player__status {
+	display: none;
+	margin: 8px 0;
+	padding: 8px 12px;
+	border-radius: 5px;
+	background: #eef5ff;
+	color: #1a4d7a;
+	font-size: 14px;
+}
+
+.cnr-player__status--error {
+	background: #fdecea;
+	color: #a12a24;
+}
+
+.cnr-player__voices-heading {
+	margin: 0 0 6px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: #888;
+}
+
+/* Mikser głosów w stylu kanałów mikserowych DAW: siatka pionowych "channel strips", każdy
+   z suwakiem głośności ustawionym pionowo i przyciskami Mute/Solo na dole — patrz
+   buildVoiceControls()/buildBackingTrackControl() w player.js. Siatka (grid) o STAŁEJ szerokości
+   kolumny (zamiast flex-wrap) — kanały wyrównują się do siebie w poziomie, także po zawinięciu
+   do kolejnego rzędu na wąskim ekranie; align-items: stretch (domyślne) wyrównuje je też
+   w pionie, rozciągając każdy kanał do wysokości najwyższego w tym samym rzędzie. */
+.cnr-player__voices {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, 92px);
+	justify-content: start;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.cnr-player__voice-row {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 8px;
+	border: 1px solid #e2e2e2;
+	border-radius: 8px;
+	background: #fafafa;
+	font-size: 12px;
+}
+
+.cnr-player__voice-row--backing {
+	border-style: dashed;
+	background: #f7f7f7;
+}
+
+.cnr-player__voice-label {
+	font-weight: 600;
+	text-align: center;
+	line-height: 1.25;
+}
+
+/* Miejsce na wybór brzmienia — ZAWSZE rezerwowane (nawet puste, np. dla podkładu
+   instrumentalnego, który nie ma brzmienia do wyboru), żeby suwak i przyciski Mute/Solo
+   wyrównywały się w poziomie między WSZYSTKIMI kanałami — patrz komentarz w buildChannelStrip. */
+/* Wybór brzmień dla wszystkich głosów (SoundFont, od 1.13.0) */
+.cnr-player__voices-heading,
+.cnr-player__sound-source {
+	grid-column: 1 / -1; /* cała szerokość siatki miksera, nie jedna kolumna kanału */
+}
+.cnr-player__sound-source {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin: 0 0 10px;
+	font-size: 13px;
+}
+.cnr-player__sound-source-select {
+	max-width: 100%;
+	font-size: 13px;
+}
+@media ( max-width: 600px ) {
+	.cnr-player__sound-source-select {
+		font-size: 16px; /* iOS Safari nie przybliża widoku po dotknięciu */
+		min-height: 40px;
+	}
+}
+
+.cnr-player__voice-timbre-wrap {
+	width: 100%;
+	min-height: 22px;
+	display: flex;
+	align-items: center;
+}
+
+.cnr-player__voice-timbre {
+	width: 100%;
+	font-size: 11px;
+	padding: 2px;
+}
+
+.cnr-player__voice-fader-wrap {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 120px;
+	/* Rośnie razem z kanałem, gdy grid rozciąga cały rząd do wysokości najwyższego sąsiada —
+	   dzięki temu przyciski Mute/Solo (poniżej) zawsze lądują na samym dole kanału, na tej samej
+	   wysokości we wszystkich kanałach danego rzędu, zamiast "unosić się" nad krótszymi kanałami. */
+	flex: 1 1 auto;
+}
+
+/* Pionowy suwak: writing-mode + direction to obecny standardowy sposób (Chrome/Firefox/Safari)
+   pionowego <input type="range"> bez sztuczek transform/rotate — min na dole, max na górze,
+   dokładnie jak fader w DAW. -webkit-appearance na wypadek starszych silników webkit. */
+.cnr-player__voice-volume {
+	writing-mode: vertical-lr;
+	direction: rtl;
+	appearance: slider-vertical;
+	-webkit-appearance: slider-vertical;
+	width: 8px;
+	height: 110px;
+	margin: 0;
+}
+
+.cnr-player__voice-volume-value {
+	min-width: 3.2em;
+	text-align: center;
+	color: #666;
+}
+
+.cnr-player__voice-bottom {
+	display: flex;
+	gap: 6px;
+}
+
+.cnr-player__voice-btn {
+	width: 26px;
+	height: 22px;
+	line-height: 20px;
+	padding: 0;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #fff;
+	cursor: pointer;
+	font-size: 11px;
+	font-weight: 700;
+	color: #555;
+}
+
+.cnr-player__voice-btn--mute.is-active {
+	background: #d94f4f;
+	border-color: #d94f4f;
+	color: #fff;
+}
+
+.cnr-player__voice-btn--solo.is-active {
+	background: #e0a934;
+	border-color: #e0a934;
+	color: #fff;
+}
+
+.cnr-player__progress {
+	height: 10px;
+	background: #eee;
+	border-radius: 5px;
+	overflow: hidden;
+	margin-bottom: 16px;
+	cursor: pointer;
+	touch-action: none;
+}
+
+.cnr-player__progress:hover {
+	background: #e0e0e0;
+}
+
+.cnr-player__progress-bar {
+	height: 100%;
+	width: 0%;
+	background: #3a7bd5;
+	transition: width 0.1s linear;
+	pointer-events: none;
+}
+
+.cnr-player__score {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	/* Wymagane, żeby kursor OSMD (pozycjonowany "position: absolute") ustawiał się
+	   względem partytury, a nie gdzieś przypadkowo względem strony motywu WordPress. */
+	position: relative;
+}
+
+/* ---------------------------------------------------------------------
+ * Urządzenia mobilne: większe cele dotyku, węższe kanały miksera, pola liczbowe tempa
+ * z font-size 16px (inaczej iOS Safari automatycznie przybliża widok po dotknięciu pola),
+ * a pasek narzędzi układa się w pełne, czytelne linie zamiast łamać się w środku etykiety.
+ * --------------------------------------------------------------------- */
+@media screen and (max-width: 600px) {
+	.cnr-player {
+		padding: 12px;
+		border-radius: 6px;
+	}
+
+	.cnr-player__toolbar {
+		gap: 8px 10px;
+	}
+
+	.cnr-player__toolbar button,
+	.cnr-player__toolbar select {
+		padding: 9px 14px;
+		font-size: 15px;
+		/* Wygodniejszy cel dotyku (wytyczne dostępności: ok. 40–44px) niż domyślna wysokość
+		   przycisku na desktopie. */
+		min-height: 40px;
+	}
+
+	/* Na wąskim ekranie tylko sama strzałka (bez opisu "Zwiń sterowanie") — górny rząd ma zostać
+	   maksymalnie kompaktowy, żeby więcej ekranu zostało dla samej partytury. Pełny opis
+	   zostaje w atrybucie aria-label (ustawianym w JS razem z tekstem), więc czytniki ekranu
+	   nadal usłyszą, co robi przycisk. */
+	.cnr-player__collapse-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.cnr-player__collapse-toggle {
+		padding: 9px 12px;
+	}
+
+	.cnr-player__collapse-icon {
+		font-size: 15px;
+	}
+
+	/* Każda etykieta (Tempo / Tempo podkładu / Głośność) na własnej, pełnej linii — zamiast
+	   fragmentować się w środku przy zawijaniu paska narzędzi na wąskim ekranie. */
+	.cnr-player__tempo-label,
+	.cnr-player__volume-label {
+		flex: 1 1 100%;
+	}
+
+	.cnr-player__tempo,
+	.cnr-player__backing-tempo,
+	.cnr-player__master-volume {
+		flex: 1 1 auto;
+		min-width: 0;
+		width: auto;
+	}
+
+	.cnr-player__tempo-number,
+	.cnr-player__backing-tempo-number {
+		/* 16px zapobiega automatycznemu przybliżeniu widoku przez iOS Safari po dotknięciu pola
+		   (przybliża, jeśli font-size pola tekstowego jest mniejszy niż 16px). */
+		font-size: 16px;
+		width: 3.4em;
+		padding: 6px;
+	}
+
+	.cnr-player__voices {
+		grid-template-columns: repeat(auto-fill, 78px);
+		gap: 8px;
+	}
+
+	.cnr-player__voice-row {
+		width: 78px;
+		padding: 8px 6px;
+		font-size: 11px;
+	}
+
+	.cnr-player__voice-fader-wrap {
+		height: 96px;
+	}
+
+	.cnr-player__voice-volume {
+		height: 86px;
+	}
+
+	/* Mute/Solo trochę większe niż na desktopie — wygodniejszy cel dotyku palcem. */
+	.cnr-player__voice-btn {
+		width: 32px;
+		height: 30px;
+		line-height: 28px;
+		font-size: 12px;
+	}
+
+	.cnr-player__progress {
+		height: 14px;
+	}
+}
+
+@media screen and (max-width: 360px) {
+	.cnr-player__voices {
+		grid-template-columns: repeat(auto-fill, 70px);
+	}
+
+	.cnr-player__voice-row {
+		width: 70px;
+	}
+}
+
+@media print {
+	.cnr-player__controls,
+	.cnr-player__toolbar,
+	.cnr-player__voices,
+	.cnr-player__progress,
+	.cnr-player__status,
+	.cnr-repertuar-list-intro,
+	#wpadminbar,
+	.site-header,
+	.site-footer {
+		display: none !important;
+	}
+	.cnr-player {
+		border: none;
+		padding: 0;
+	}
+}
+
+/* Lista repertuaru (archiwum) */
+.cnr-repertuar-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.cnr-repertuar-list__item {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 4px 12px;
+	padding: 14px 0;
+	border-bottom: 1px solid #eee;
+}
+
+@media screen and (max-width: 480px) {
+	/* Na wąskim ekranie tytuł (i kompozytor/kategorie pod nim) dostaje całą szerokość, a lista
+	   głosów (Sopran/Alt/...) ląduje pod spodem zamiast ściskać się obok długiego tytułu. */
+	.cnr-repertuar-list__item {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+	}
+}
+
+.cnr-repertuar-list__title {
+	font-size: 18px;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.cnr-repertuar-list__composer {
+	color: #666;
+	font-size: 14px;
+}
+
+.cnr-repertuar-list__parts {
+	color: #888;
+	font-size: 13px;
+}
+
+.cnr-repertuar-list__categories {
+	color: #3a7bd5;
+	font-size: 12px;
+	margin-top: 2px;
+}
+
+.cnr-repertuar-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 16px 0 20px;
+}
+
+.cnr-repertuar-filters__link {
+	display: inline-block;
+	padding: 5px 12px;
+	border: 1px solid #d8d8d8;
+	border-radius: 999px;
+	text-decoration: none;
+	color: inherit;
+	font-size: 13px;
+}
+
+.cnr-repertuar-filters__link--active {
+	background: #3a7bd5;
+	border-color: #3a7bd5;
+	color: #fff;
+}
+
+.cnr-repertuar-filters__count {
+	opacity: 0.7;
+}
+
+.cnr-repertuar-empty {
+	padding: 24px 0;
+	color: #666;
+}
+
+/* Metronom i odliczanie (od 1.15.0) — w górnym, zawsze widocznym rzędzie przycisków. */
+.cnr-player__toolbar .cnr-player__metronome--on {
+	background: #3a7bd5;
+	border-color: #3a7bd5;
+	color: #fff;
+}
+
+.cnr-player__count-in {
+	font: inherit;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 14px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+/* Przyciski z ikoną i opisem (od 1.15.1) — na telefonie sama ikona, patrz niżej. */
+.cnr-player__btn-icon {
+	display: inline-block;
+	min-width: 1em;
+	text-align: center;
+}
+
+.cnr-player__btn-label {
+	margin-left: 0.35em;
+}
+
+.cnr-player__btn-short {
+	display: none;
+}
+
+.cnr-player__zoom {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+
+.cnr-player__zoom-caption {
+	font-size: 14px;
+	margin-right: 2px;
+}
+
+.cnr-player__zoom-reset {
+	min-width: 5.5em;
+}
+
+/* ---------------------------------------------------------------------
+ * Telefon — widok kompaktowy (od 1.15.1): nuty na całą szerokość, górny rząd z samych ikon.
+ * --------------------------------------------------------------------- */
+@media screen and (max-width: 600px) {
+	.cnr-player {
+		border: 0;
+		border-radius: 0;
+		padding: 0;
+	}
+
+	.cnr-player__controls {
+		padding: 4px 0 6px;
+		margin-bottom: 4px;
+	}
+
+	.cnr-player__controls > .cnr-player__toolbar {
+		flex-wrap: nowrap;
+		gap: 6px;
+	}
+
+	.cnr-player__controls > .cnr-player__toolbar button {
+		min-width: 44px;
+		padding: 8px 10px;
+	}
+
+	.cnr-player__btn-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.cnr-player__btn-short {
+		display: inline;
+	}
+
+	.cnr-player__btn-icon {
+		font-size: 17px;
+		line-height: 1;
+	}
+
+	.cnr-player__zoom {
+		flex: 1 1 100%;
+	}
+
+	.cnr-player__zoom button {
+		min-width: 44px;
+	}
+
+	.cnr-player__zoom-reset {
+		flex: 1 1 auto;
+	}
+}
+
+/* Wyprzedzenie podświetlenia (od 1.15.3) */
+.cnr-player__lead-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+	flex-wrap: wrap;
+}
+
+.cnr-player__lead {
+	width: 140px;
+}
+
+.cnr-player__lead-value {
+	min-width: 9em;
+	color: #555;
+}
+
+@media screen and (max-width: 600px) {
+	.cnr-player__lead-label {
+		flex: 1 1 100%;
+		flex-wrap: nowrap;
+		font-size: 13px;
+	}
+
+	.cnr-player__lead-value {
+		min-width: 0;
+		white-space: nowrap;
+	}
+
+	.cnr-player__lead {
+		flex: 1 1 auto;
+		min-width: 0;
+		width: auto;
+	}
+}

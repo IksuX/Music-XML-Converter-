@@ -1,0 +1,68 @@
+name: macOS app
+
+on:
+  push:
+    branches: [main]
+    paths: ["macos/**", ".github/workflows/macos.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        run: echo "v=$(sed -n 's/^VERSION="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Build (universal)
+        run: UNIVERSAL=1 bash build.sh
+
+      - name: Check
+        run: |
+          APP="build/Nuty MusicXML.app"
+          lipo -info "$APP/Contents/MacOS/NutyMusicXML"
+          test -f "$APP/Contents/Resources/wektor_pdf.py"
+          test -f "$APP/Contents/Resources/Player/index.html"
+          plutil -lint "$APP/Contents/Info.plist"
+          codesign --verify --deep "$APP"
+
+      - name: Vector reader test
+        run: |
+          python3 -m venv /tmp/tv && /tmp/tv/bin/pip install -q "pymupdf>=2.1"
+          /tmp/tv/bin/python -c "
+          import pymupdf, sys, tempfile, os
+          sys.path.insert(0, 'Resources'); import wektor_pdf as w
+          d = pymupdf.open(); d.new_page().insert_text((72, 72), 'test')
+          p = os.path.join(tempfile.mkdtemp(), 't.pdf'); d.save(p)
+          x, warn = w.convert(p); assert x is None; print('OK', w.VERSION)"
+
+      - name: Package
+        run: |
+          V=${{ steps.ver.outputs.v }}
+          D="out/Nuty MusicXML $V"
+          mkdir -p "$D"
+          cp -R "build/Nuty MusicXML.app" "$D/"
+          cp zainstaluj-silniki.sh README.md "$D/"
+          cd out && ditto -c -k --sequesterRsrc --keepParent "Nuty MusicXML $V" "NutyMusicXML-macOS-$V.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NutyMusicXML-macOS-${{ steps.ver.outputs.v }}
+          path: macos/out/NutyMusicXML-macOS-*.zip
+
+      - name: Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Nuty → MusicXML ${{ steps.ver.outputs.v }}
+          body_path: .github/release-notes.md
+          files: macos/out/NutyMusicXML-macOS-*.zip
