@@ -34,9 +34,13 @@ jobs:
           plutil -lint "$APP/Contents/Info.plist"
           codesign --verify --deep "$APP"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Vector reader test
         run: |
-          python3 -m venv /tmp/tv && /tmp/tv/bin/pip install -q "pymupdf>=2.1"
+          python -m venv /tmp/tv && /tmp/tv/bin/pip install -q "pymupdf>=2.1"
           /tmp/tv/bin/python -c "
           import pymupdf, sys, tempfile, os
           sys.path.insert(0, 'Resources'); import wektor_pdf as w
