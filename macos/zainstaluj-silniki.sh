@@ -101,7 +101,7 @@ install_tools() {
   "$UV" venv --python 3.11 "$TOOLS"
   # Tylko gotowe paczki: PyMuPDF 2.x nie ma wersji dla Maców z Intelem (kompilacja ze źródeł się nie udaje),
   # więc tam instaluje się najnowsza 1.x — wyniki czytnika są takie same (sprawdzone od 1.28).
-  "$UV" pip install --python "$TOOLS/bin/python" --no-build-package pymupdf "pymupdf>=1.28"
+  "$UV" pip install --python "$TOOLS/bin/python" --only-binary pymupdf "pymupdf>=1.28"
   "$TOOLS/bin/python3" -c "import pymupdf; print('   PyMuPDF', pymupdf.__version__)"
   ok "Czytnik PDF gotowy"
 }
