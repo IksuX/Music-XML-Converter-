@@ -178,7 +178,7 @@ final class Converter: ObservableObject {
             let checker = ProcessRunner()
             Task { [weak self] in
                 let r = try? await checker.run(executable: py, arguments: ["-I", "-c",
-                    "import pymupdf, sys; sys.exit(tuple(map(int, pymupdf.VersionBind.split('.')[:2])) < (2, 1))"],
+                    "import pymupdf, sys; sys.exit(tuple(map(int, pymupdf.VersionBind.split('.')[:2])) < (1, 28))"],
                     onLine: { _ in })
                 guard let self, let r, r.exitCode != 0 else { return }
                 self.append("ℹ︎ Czytnik PDF wymaga aktualizacji — aktualizuję w tle.")

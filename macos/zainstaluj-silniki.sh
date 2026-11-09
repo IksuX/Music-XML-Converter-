@@ -90,7 +90,7 @@ find_uv() {
 # ---------------------------------------------------------------- czytnik PDF z programów nutowych
 TOOLS="$SUPPORT/tools-venv"
 install_tools() {
-  if [[ -x "$TOOLS/bin/python3" && $FORCE -eq 0 ]] && "$TOOLS/bin/python3" -c "import pymupdf, sys; sys.exit(tuple(map(int, pymupdf.VersionBind.split('.')[:2])) < (2, 1))" 2>/dev/null; then
+  if [[ -x "$TOOLS/bin/python3" && $FORCE -eq 0 ]] && "$TOOLS/bin/python3" -c "import pymupdf, sys; sys.exit(tuple(map(int, pymupdf.VersionBind.split('.')[:2])) < (1, 28))" 2>/dev/null; then
     ok "Czytnik PDF już jest: $TOOLS"
     return
   fi
@@ -99,7 +99,9 @@ install_tools() {
   say "Instaluję czytnik PDF z programów nutowych (PyMuPDF)…"
   rm -rf "$TOOLS"
   "$UV" venv --python 3.11 "$TOOLS"
-  "$UV" pip install --python "$TOOLS/bin/python" "pymupdf>=2.1"
+  # Tylko gotowe paczki: PyMuPDF 2.x nie ma wersji dla Maców z Intelem (kompilacja ze źródeł się nie udaje),
+  # więc tam instaluje się najnowsza 1.x — wyniki czytnika są takie same (sprawdzone od 1.28).
+  "$UV" pip install --python "$TOOLS/bin/python" --no-build-package pymupdf "pymupdf>=1.28"
   "$TOOLS/bin/python3" -c "import pymupdf; print('   PyMuPDF', pymupdf.__version__)"
   ok "Czytnik PDF gotowy"
 }
