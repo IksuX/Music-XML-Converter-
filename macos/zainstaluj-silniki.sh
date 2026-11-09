@@ -56,19 +56,29 @@ install_audiveris() {
     exit 1
   fi
   echo "   $url"
-  echo "   pobieram (ok. 200 MB, to chwilę potrwa)…"
+  echo "   pobieram (ok. 90 MB)…"
   curl -fL $PROGRESS "$url" -o "$TMP/audiveris.dmg"
 
   say "Instaluję Audiverisa…"
   local mnt="$TMP/mnt"
   mkdir -p "$mnt"
-  hdiutil attach -nobrowse -quiet -mountpoint "$mnt" "$TMP/audiveris.dmg"
+  # Obraz może zawierać okno licencji, które czeka na „Zgadzam się” — bez terminala (np. z aplikacji)
+  # nikt go nie zatwierdzi. Konwersja do zwykłego obrazu pomija to okno.
+  hdiutil convert -quiet "$TMP/audiveris.dmg" -format UDTO -o "$TMP/audiveris-plain" </dev/null
+  hdiutil attach -nobrowse -noverify -noautoopen -readonly -mountpoint "$mnt" "$TMP/audiveris-plain.cdr" </dev/null >/dev/null
+  local src
+  src="$(find "$mnt" -maxdepth 2 -name 'Audiveris*.app' -type d | head -1)"
+  if [[ -z "$src" ]]; then
+    hdiutil detach -quiet "$mnt" || true
+    echo "W obrazie nie ma Audiveris.app — pobierz instalator ręcznie: https://github.com/Audiveris/audiveris/releases"
+    exit 1
+  fi
   local dest="/Applications"
   [[ -w "$dest" ]] || dest="$HOME/Applications"
   mkdir -p "$dest"
   rm -rf "$dest/Audiveris.app"
-  cp -R "$mnt/Audiveris.app" "$dest/"
-  hdiutil detach -quiet "$mnt"
+  ditto "$src" "$dest/Audiveris.app"
+  hdiutil detach -quiet "$mnt" || hdiutil detach -force -quiet "$mnt" || true
   # Aplikacja nie jest podpisana przez Apple — zdejmujemy kwarantannę, żeby dało się ją uruchomić z naszej apki.
   xattr -dr com.apple.quarantine "$dest/Audiveris.app" 2>/dev/null || true
   ok "Audiveris zainstalowany w $dest/Audiveris.app"

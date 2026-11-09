@@ -397,7 +397,7 @@ struct SettingsView: View {
             Section("Audiveris") {
                 TextField("Własna ścieżka (puste = szukaj automatycznie)", text: $conv.customAudiveris)
                 pathStatus(conv.audiverisPath)
-                installButton(conv.audiverisPath == nil ? "Zainstaluj Audiveris (ok. 200 MB)" : "Zaktualizuj Audiveris",
+                installButton(conv.audiverisPath == nil ? "Zainstaluj Audiveris (ok. 90 MB, z Javą)" : "Zaktualizuj Audiveris",
                               "audiveris", force: conv.audiverisPath != nil)
                 TextField("Języki tekstu pod nutami (OCR)", text: $conv.ocrLanguages)
                     .help("Kody Tesseracta połączone plusem, np. pol+eng albo pol+lat+deu")

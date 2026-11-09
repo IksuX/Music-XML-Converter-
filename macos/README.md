@@ -30,7 +30,7 @@ mv "Nuty MusicXML.app" /Applications/
 open "/Applications/Nuty MusicXML.app"
 ```
 
-**Silniki instaluje sama aplikacja:** przy pierwszym uruchomieniu pobiera w tle czytnik PDF z programów nutowych (ok. 80 MB). Do skanów i zdjęć kliknij **Zainstaluj silniki** na pasku w oknie albo pojedyncze przyciski w Ustawieniach (⌘,): Audiveris (ok. 200 MB), języki OCR, oemer (ok. 400 MB). Postęp widać w logu na dole okna; nie trzeba hasła administratora. Skrypt `zainstaluj-silniki.sh` jest też w paczce, gdybyś wolał Terminal.
+**Silniki instaluje sama aplikacja:** przy pierwszym uruchomieniu pobiera w tle czytnik PDF z programów nutowych (ok. 80 MB). Do skanów i zdjęć kliknij **Zainstaluj silniki** na pasku w oknie albo pojedyncze przyciski w Ustawieniach (⌘,): Audiveris (ok. 90 MB, z Javą), języki OCR, oemer (ok. 400 MB). Postęp widać w logu na dole okna; nie trzeba hasła administratora. Skrypt `zainstaluj-silniki.sh` jest też w paczce, gdybyś wolał Terminal.
 
 Bez polecenia `xattr` macOS powie, że aplikacja „jest uszkodzona” — to tylko blokada dla programów spoza App Store bez podpisu Apple. Aplikacja działa na Macach z Apple Silicon i z Intelem (macOS 13+).
 
