@@ -1,4 +1,4 @@
-# Nuty → MusicXML 0.4.1 — Windows
+# Nuty → MusicXML 0.5.0 — Windows
 
 Wersja na Windows 10/11 (64-bit) aplikacji do zamiany PDF-ów, skanów i zdjęć nut na **MusicXML**. Umie to samo co wersja na Maca:
 
@@ -9,7 +9,7 @@ Wersja na Windows 10/11 (64-bit) aplikacji do zamiany PDF-ów, skanów i zdjęć
 
 ## Dla użytkownika
 
-1. Uruchom `NutyMusicXML-Setup-0.4.1.exe`. Instalator nie wymaga uprawnień administratora (instaluje dla bieżącego użytkownika; można wybrać „dla wszystkich”).
+1. Uruchom `NutyMusicXML-Setup-0.5.0.exe`. Instalator nie wymaga uprawnień administratora (instaluje dla bieżącego użytkownika; można wybrać „dla wszystkich”).
 2. Windows może pokazać „System Windows ochronił ten komputer” — instalator nie jest podpisany certyfikatem. Kliknij **Więcej informacji → Uruchom mimo to**.
 3. PDF-y z programów nutowych działają od razu. Do skanów i zdjęć otwórz **⚙ Ustawienia** i kliknij **Zainstaluj** przy Audiverisie (ok. 200 MB, z językami tekstu pod nutami) i/lub oemerze (ok. 250 MB). Aplikacja pobiera je sama.
 
@@ -21,18 +21,22 @@ Dane aplikacji (ustawienia, silniki, języki OCR) są w `%LOCALAPPDATA%\NutyMusi
 
 Brzmienia w odtwarzaczu pobierają się z internetu przy pierwszym odtworzeniu, tak jak na stronie. Aplikacja korzysta z Microsoft Edge WebView2, który jest w Windows 11 i aktualnym Windows 10; jeśli go brak, instalator poda link.
 
+## Aktualizacje
+
+Przy uruchomieniu (najwyżej co 6 godzin) aplikacja sprawdza wydania na GitHubie. Gdy jest nowsza wersja, u góry okna pojawia się pasek **Dostępna nowa wersja** — **Zaktualizuj** pobiera instalator, sprawdza jego sumę kontrolną SHA-256, zamyka aplikację, instaluje nową wersję bez pytań i uruchamia ją ponownie. Ręcznie: ⚙ Ustawienia → Aktualizacje → **Sprawdź teraz** (tam też wyłączysz automatyczne sprawdzanie). Ustawienia i zainstalowane silniki zostają.
+
 ## Budowanie instalatora
 
 **Automatycznie (GitHub Actions):** wrzuć ten folder do repozytorium na GitHubie. Przy każdym pushu na `main` workflow `.github/workflows/windows.yml` testuje, buduje i publikuje instalator w zakładce **Releases** (wydanie `v<wersja>` z `app/nuty/__init__.py`; ponowny push tej samej wersji podmienia plik). Nowa wersja = zmiana `__version__` i push.
 
 ```
-git init && git add . && git commit -m "Nuty MusicXML 0.4.1"
+git init && git add . && git commit -m "Nuty MusicXML 0.5.0"
 git branch -M main
 git remote add origin https://github.com/<konto>/nuty-musicxml-windows.git
 git push -u origin main
 ```
 
-**Na własnym komputerze z Windows:** zainstaluj Python 3.11 (python.org) i Inno Setup 6, potem dwuklik `build.bat`. Wynik: `dist\NutyMusicXML-Setup-0.4.1.exe`.
+**Na własnym komputerze z Windows:** zainstaluj Python 3.11 (python.org) i Inno Setup 6, potem dwuklik `build.bat`. Wynik: `dist\NutyMusicXML-Setup-0.5.0.exe`.
 
 **Do testów bez budowania:** `pip install -r requirements.txt` i `python app\main.py`.
 

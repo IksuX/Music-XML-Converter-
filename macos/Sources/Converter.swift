@@ -225,6 +225,8 @@ final class Converter: ObservableObject {
         }
     }
 
+    func appendLog(_ line: String) { append(line) }
+
     private func append(_ line: String) {
         log.append(line)
         if log.count > 3000 { log.removeFirst(log.count - 3000) }

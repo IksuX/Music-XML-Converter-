@@ -46,6 +46,8 @@ button.primary:hover:not(:disabled) { background: #172e6e; }
 .badge i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #d55; margin-right: 5px; vertical-align: 1px; }
 .badge.ok i { background: #2fa84f; }
 
+.banner.update { background: #e8f0fe; border-bottom-color: #c6d6f7; }
+.banner progress { width: 140px; }
 .banner { display: flex; gap: 12px; align-items: center; padding: 8px 20px; background: #fff7e0; border-bottom: 1px solid #f0dfa8; font-size: 13px; }
 
 /* lista / upuszczanie */

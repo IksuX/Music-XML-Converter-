@@ -1,4 +1,4 @@
-# Nuty → MusicXML 0.4.1
+# Nuty → MusicXML 0.5.0
 
 Aplikacja na macOS do zamiany PDF-ów, skanów i zdjęć nut na pliki **MusicXML** (`.musicxml`). Takie pliki otworzysz w MuseScore, Sibeliusie, Finale, Dorico albo Logicu.
 
@@ -31,6 +31,10 @@ bash zainstaluj-silniki.sh                            # czytnik PDF + Audiveris 
 ```
 
 Bez polecenia `xattr` macOS powie, że aplikacja „jest uszkodzona” — to tylko blokada dla programów spoza App Store bez podpisu Apple. Aplikacja działa na Macach z Apple Silicon i z Intelem (macOS 13+).
+
+## Aktualizacje
+
+Przy uruchomieniu (najwyżej co 6 godzin) aplikacja sprawdza wydania na GitHubie. Gdy jest nowsza wersja, nad listą plików pojawia się pasek **Dostępna nowa wersja** — **Zaktualizuj** pobiera paczkę, sprawdza jej sumę kontrolną SHA-256, zamyka aplikację, podmienia ją i uruchamia ponownie. Ręcznie: menu *Nuty MusicXML → Sprawdź aktualizacje…* albo Ustawienia → Aktualizacje (tam też wyłączysz automatyczne sprawdzanie). Aplikacja musi leżeć w folderze, do którego masz prawo zapisu (zwykle /Applications). Silników (Audiveris, oemer) aktualizacja nie rusza.
 
 ## Budowanie ze źródeł (jednorazowo)
 

@@ -15,6 +15,8 @@ DEFAULTS = {
     "ocr_languages": "pol+eng",
     "custom_audiveris": "",
     "custom_oemer": "",
+    "auto_update": True,            # sprawdzaj aktualizacje na GitHubie przy starcie
+    "last_update_check": 0.0,
 }
 
 
@@ -27,6 +29,8 @@ class Settings:
             with open(self._path, encoding="utf-8") as f:
                 saved = json.load(f)
             for k, v in saved.items():
+                if isinstance(v, int) and isinstance(DEFAULTS.get(k), float):
+                    v = float(v)
                 if k in DEFAULTS and isinstance(v, type(DEFAULTS[k])):
                     self._data[k] = v
         except (OSError, ValueError):
@@ -41,6 +45,8 @@ class Settings:
             return dict(self._data)
 
     def set(self, key, value):
+        if isinstance(value, int) and not isinstance(value, bool) and isinstance(DEFAULTS.get(key), float):
+            value = float(value)
         if key not in DEFAULTS:
             raise KeyError(key)
         if not isinstance(value, type(DEFAULTS[key])):

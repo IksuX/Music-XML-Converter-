@@ -101,6 +101,30 @@ def test_converter_scan_without_engines(monkeypatch=None):
     assert j.status == "failed" and "silnik" in j.text
 
 
+def test_updater_versions_and_release_pick():
+    from nuty import updater
+    assert updater.newer("0.5.0", "0.4.1") and updater.newer("0.10.0", "0.9.9")
+    assert not updater.newer("0.4.1", "0.4.1") and not updater.newer("v0.4.1", "0.4.2")
+    rel = [
+        {"tag_name": "v0.6.0", "draft": False, "prerelease": False, "body": "mac only",
+         "assets": [{"name": "NutyMusicXML-macOS-0.6.0.zip"}]},
+        {"tag_name": "v0.7.0", "draft": True, "assets": [{"name": "NutyMusicXML-Setup-0.7.0.exe"}]},
+        {"tag_name": "v0.5.0", "draft": False, "prerelease": False, "body": "zmiany", "html_url": "https://x/r",
+         "assets": [{"name": "NutyMusicXML-Setup-0.5.0.exe", "browser_download_url": "https://x/a.exe",
+                     "size": 10, "digest": "sha256:ab"}]},
+    ]
+    info = updater.pick_release(rel)
+    assert info["version"] == "0.5.0" and info["url"] == "https://x/a.exe" and info["digest"] == "sha256:ab"
+    assert updater.pick_release([]) is None
+
+
+def test_settings_float_roundtrip():
+    from nuty.settings import Settings
+    s = Settings()
+    s.set("last_update_check", 1700000000)   # int → float
+    assert isinstance(s.get("last_update_check"), float)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

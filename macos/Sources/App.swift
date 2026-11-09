@@ -16,6 +16,9 @@ struct NutyMusicXMLApp: App {
                 }
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Sprawdź aktualizacje…") { Task { await Updater.shared.check(manual: true) } }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Dodaj pliki…") { converter.chooseFiles() }
                     .keyboardShortcut("o")

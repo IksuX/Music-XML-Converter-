@@ -86,6 +86,7 @@ def main():
         args = [a for a in sys.argv[1:] if not a.startswith("--")]
         if args:
             api.add_paths(args)
+        api._check_update_on_start()
 
     webview.start(on_start, private_mode=False, storage_path=str(data_dir() / "webview"),
                   debug="--debug" in sys.argv)

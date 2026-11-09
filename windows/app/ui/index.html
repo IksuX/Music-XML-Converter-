@@ -26,6 +26,16 @@
   </div>
 </header>
 
+<div class="banner update" id="update-banner" hidden>
+  <span>⬇ <b>Dostępna nowa wersja <span id="up-ver"></span></b> <span class="muted">(masz <span id="up-cur"></span>)</span></span>
+  <span class="spacer"></span>
+  <span id="up-status" class="muted"></span>
+  <progress id="up-prog" max="1" value="0" hidden></progress>
+  <button data-act="up-notes">Co nowego</button>
+  <button data-act="up-later" id="up-later">Później</button>
+  <button class="primary" data-act="up-install" id="up-install">Zaktualizuj</button>
+</div>
+
 <div class="banner" id="setup-banner" hidden>
   <span>Do skanów i zdjęć potrzebne są silniki rozpoznawania nut (Audiveris, oemer). PDF-y z programów nutowych działają od razu.</span>
   <button class="primary" data-act="open-settings">Zainstaluj silniki…</button>
@@ -105,6 +115,14 @@
       <label><input type="checkbox" id="deskew"> Prostowanie krzywych zdjęć (deskew)</label>
       <label><input type="checkbox" id="merge-pages"> Łącz strony PDF w jeden plik</label>
       <p class="hint">oemer nie odczytuje tekstu pod nutami — do tego służy Audiveris.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Aktualizacje</legend>
+      <label><input type="checkbox" id="auto-update"> Sprawdzaj automatycznie przy uruchomieniu (z GitHuba)</label>
+      <div class="row"><span class="muted">Wersja <span id="cur-ver"></span></span>
+        <button type="button" data-act="up-check">Sprawdź teraz</button>
+        <span id="up-check-status" class="hint"></span></div>
     </fieldset>
 
     <div class="row end">

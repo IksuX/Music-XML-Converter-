@@ -1,7 +1,7 @@
 ; Inno Setup 6 — instalator Nuty → MusicXML
 ; iscc /DAppVersion=0.4.1 installer\NutyMusicXML.iss
 #ifndef AppVersion
-  #define AppVersion "0.4.1"
+  #define AppVersion "0.5.0"
 #endif
 
 [Setup]
@@ -24,6 +24,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ChangesAssociations=yes
+CloseApplications=yes
+RestartApplications=no
 DisableProgramGroupPage=yes
 
 [Languages]
@@ -55,6 +57,8 @@ Root: HKA; Subkey: "Software\Classes\Applications\NutyMusicXML.exe\SupportedType
 
 [Run]
 Filename: "{app}\NutyMusicXML.exe"; Description: "Uruchom Nuty → MusicXML"; Flags: nowait postinstall skipifsilent
+; po automatycznej aktualizacji (instalator uruchomiony z aplikacji z /SILENT) — uruchom ponownie
+Filename: "{app}\NutyMusicXML.exe"; Flags: nowait; Check: WizardSilent
 
 [Code]
 // WebView2 is built into Windows 11 and current Windows 10. When it is missing, show where to get it.
@@ -71,7 +75,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var code: Integer;
 begin
-  if (CurStep = ssPostInstall) and not WebView2Installed then
+  if (CurStep = ssPostInstall) and not WizardSilent and not WebView2Installed then
     if MsgBox('Aplikacja potrzebuje składnika Microsoft Edge WebView2 Runtime, którego nie znaleziono.' + #13#10 +
               'Otworzyć stronę pobierania?', mbConfirmation, MB_YESNO) = IDYES then
       ShellExec('open', 'https://go.microsoft.com/fwlink/p/?LinkId=2124703', '', '', SW_SHOWNORMAL, ewNoWait, code);

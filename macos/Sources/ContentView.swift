@@ -12,11 +12,16 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
     // Bez @State: w nowym SDK to makro, którego Command Line Tools (bez Xcode) nie potrafią rozwinąć.
     @StateObject private var ui = ViewState()
+    @ObservedObject private var upd = Updater.shared
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
+            if let info = upd.available, !upd.dismissed || upd.busy {
+                updateBanner(info)
+                Divider()
+            }
             fileArea
                 .dropDestination(for: URL.self) { urls, _ in
                     conv.add(urls: urls)
@@ -28,7 +33,11 @@ struct ContentView: View {
             Divider()
             footer
         }
-        .onAppear { conv.refreshEngines() }
+        .onAppear {
+            conv.refreshEngines()
+            upd.converter = conv
+            upd.checkOnLaunch()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openPlayerRequested)) { note in
             if let url = note.object as? URL { openWindow(value: url) }
         }
@@ -61,6 +70,32 @@ struct ContentView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    // MARK: Aktualizacja
+
+    private func updateBanner(_ info: UpdateInfo) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.accentColor)
+            Text("Dostępna nowa wersja \(info.version)").fontWeight(.semibold)
+            Text("(masz \(Updater.currentVersion))").foregroundStyle(.secondary)
+            Spacer()
+            if upd.busy {
+                ProgressView().controlSize(.small)
+                Text(upd.status).font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Co nowego") { upd.openPage() }
+            Button("Później") { upd.dismissed = true }
+                .disabled(upd.busy)
+            Button("Zaktualizuj") { Task { await upd.install() } }
+                .buttonStyle(.borderedProminent)
+                .disabled(upd.busy || conv.isRunning)
+                .help(conv.isRunning ? "Poczekaj na koniec konwersji" : "Pobierz, zainstaluj i uruchom ponownie")
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.08))
     }
 
     // MARK: Lista plików
@@ -303,6 +338,7 @@ private struct JobRow: View {
 
 struct SettingsView: View {
     @EnvironmentObject var conv: Converter
+    @ObservedObject private var upd = Updater.shared
 
     var body: some View {
         Form {
@@ -333,6 +369,19 @@ struct SettingsView: View {
                 Text("oemer nie odczytuje tekstu pod nutami — do tego służy Audiveris.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Aktualizacje") {
+                Toggle("Sprawdzaj automatycznie przy uruchomieniu (z GitHuba)", isOn: $upd.autoCheck)
+                HStack {
+                    Text("Wersja \(Updater.currentVersion)").foregroundStyle(.secondary)
+                    Spacer()
+                    if upd.busy { ProgressView().controlSize(.small) }
+                    Button("Sprawdź teraz") { Task { await upd.check(manual: true) } }
+                        .disabled(upd.busy)
+                }
+                if !upd.status.isEmpty {
+                    Text(upd.status).font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section {
                 Button("Sprawdź ponownie") { conv.refreshEngines() }
                 Text("Silniki instaluje skrypt zainstaluj-silniki.sh z paczki aplikacji.")
@@ -340,7 +389,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 640)
+        .frame(width: 560, height: 720)
     }
 
     @ViewBuilder

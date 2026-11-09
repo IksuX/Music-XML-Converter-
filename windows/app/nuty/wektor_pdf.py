@@ -34,7 +34,7 @@ try:
 except ImportError:  # starsze wersje
     import fitz as pymupdf  # type: ignore
 
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 
 # --------------------------------------------------------------------------- fonty nutowe
 

@@ -69,7 +69,26 @@
     $('btn-clear').disabled = s.running || !s.jobs.length;
     $('btn-reset').hidden = s.running || !s.jobs.some(function (j) { return j.status !== 'waiting'; });
 
+    renderUpdate(s.update);
     renderSettings(s);
+  }
+
+  function renderUpdate(u) {
+    if (!u) { return; }
+    var a = u.available;
+    $('update-banner').hidden = !a || (u.dismissed && !u.busy);
+    if (a) {
+      $('up-ver').textContent = a.version;
+      $('up-cur').textContent = u.current;
+    }
+    var downloading = u.busy && a && u.progress > 0;
+    $('up-prog').hidden = !downloading;
+    $('up-prog').value = u.progress || 0;
+    $('up-status').textContent = a ? u.status : '';
+    $('up-install').disabled = u.busy || state.running || state.installing;
+    $('up-later').disabled = u.busy;
+    $('cur-ver').textContent = u.current;
+    $('up-check-status').textContent = a ? '' : (u.status || '');
   }
 
   function badge(id, ok) {
@@ -163,6 +182,7 @@
       $('ocr-langs').value = s.settings.ocr_languages;
       $('deskew').checked = s.settings.oemer_deskew;
       $('merge-pages').checked = s.settings.merge_oemer_pages;
+      $('auto-update').checked = s.settings.auto_update;
       settingsOpenedSync = true;
     }
     status('st-audiveris', s.engines.audiveris, 'Nie znaleziono — zainstaluj albo wskaż Audiveris.exe');
@@ -201,6 +221,12 @@
       else if (a === 'log-copy') { copyLog(); }
       else if (a === 'log-save') { api.log_save().then(function (ok) { if (ok) { toast('Log zapisany'); } }); }
       else if (a === 'log-clear') { clearLog(); }
+      else if (a === 'up-check') { api.check_update(); }
+      else if (a === 'up-notes') { api.open_update_page(); }
+      else if (a === 'up-later') { api.dismiss_update(); }
+      else if (a === 'up-install') {
+        api.install_update().then(function (r) { if (r && !r.ok) { toast(r.error, 5000); } });
+      }
     });
 
     Array.prototype.forEach.call(document.querySelectorAll('#engine button'), function (b) {
@@ -216,6 +242,7 @@
     $('use-vector').onchange = function () { api.set_setting('use_vector', this.checked); };
     $('deskew').onchange = function () { api.set_setting('oemer_deskew', this.checked); };
     $('merge-pages').onchange = function () { api.set_setting('merge_oemer_pages', this.checked); };
+    $('auto-update').onchange = function () { api.set_setting('auto_update', this.checked); };
     $('ocr-langs').onchange = function () { api.set_setting('ocr_languages', this.value.trim() || 'pol+eng'); };
     Array.prototype.forEach.call(document.querySelectorAll('[data-install]'), function (b) {
       b.onclick = function () { $('log').hidden = false; api.install(b.dataset.install); };
@@ -274,10 +301,10 @@
   }
 
   var toastTimer = null;
-  function toast(msg) {
+  function toast(msg, ms) {
     var t = $('toast');
     t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, 1800);
+    toastTimer = setTimeout(function () { t.hidden = true; }, ms || 1800);
   }
 })();

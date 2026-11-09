@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import __version__, imaging, player_server
+from . import __version__, imaging, player_server, updater
 
 
 def _open_external(path):
@@ -45,6 +45,8 @@ class Api:
         self._port = port
         self._window = None
         self._player_windows = {}
+        self._updater = updater.Updater(converter.settings, converter.log,
+                                        can_install=lambda: not (converter.running or converter.installing))
 
     def _set_window(self, w):
         self._window = w
@@ -66,6 +68,7 @@ class Api:
             "log_total": total,
             "log_lines": lines,
             "log_reset": reset,
+            "update": self._updater.state(),
         }
 
     # ------------------------------------------------------------- pliki
@@ -128,6 +131,32 @@ class Api:
 
     def install(self, what):
         return self._conv.install(what)
+
+    # ------------------------------------------------------------- aktualizacje
+    def check_update(self):
+        return self._updater.check(manual=True)
+
+    def install_update(self):
+        return self._updater.install(on_quit=self._quit_for_update)
+
+    def dismiss_update(self):
+        self._updater.dismiss()
+
+    def open_update_page(self):
+        info = self._updater.available
+        updater.open_page(info["page"] if info else f"https://github.com/{updater.REPO}/releases")
+
+    def _check_update_on_start(self):
+        self._updater.check_on_start()
+
+    def _quit_for_update(self):
+        self._conv.cancel()
+        import webview
+        for w in list(webview.windows):
+            try:
+                w.destroy()
+            except Exception:  # noqa
+                pass
 
     # ------------------------------------------------------------- log
     def log_text(self):

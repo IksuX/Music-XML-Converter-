@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   build:
+    concurrency:
+      group: release-upload
+      cancel-in-progress: false
     runs-on: windows-latest
     defaults:
       run:
