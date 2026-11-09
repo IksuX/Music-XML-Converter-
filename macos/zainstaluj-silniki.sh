@@ -24,8 +24,16 @@ mkdir -p "$SUPPORT"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-say() { printf '\n\033[1m→ %s\033[0m\n' "$*"; }
-ok()  { printf '\033[32m✓ %s\033[0m\n' "$*"; }
+# Uruchomiony z aplikacji (bez terminala): bez kolorów i bez paska postępu curla, który zaśmieca log.
+if [[ -t 1 && -z "${NUTY_GUI:-}" ]]; then
+  say() { printf '\n\033[1m→ %s\033[0m\n' "$*"; }
+  ok()  { printf '\033[32m✓ %s\033[0m\n' "$*"; }
+  PROGRESS="--progress-bar"
+else
+  say() { printf '→ %s\n' "$*"; }
+  ok()  { printf '✓ %s\n' "$*"; }
+  PROGRESS="-sS"
+fi
 
 # ---------------------------------------------------------------- Audiveris
 install_audiveris() {
@@ -48,7 +56,8 @@ install_audiveris() {
     exit 1
   fi
   echo "   $url"
-  curl -fL --progress-bar "$url" -o "$TMP/audiveris.dmg"
+  echo "   pobieram (ok. 200 MB, to chwilę potrwa)…"
+  curl -fL $PROGRESS "$url" -o "$TMP/audiveris.dmg"
 
   say "Instaluję Audiverisa…"
   local mnt="$TMP/mnt"
@@ -106,7 +115,8 @@ install_ocr() {
     if [[ -s "$dir/$l.traineddata" && $FORCE -eq 0 ]]; then
       echo "   jest: $l"; continue
     fi
-    curl -fL --progress-bar "https://github.com/tesseract-ocr/tessdata/raw/main/$l.traineddata" -o "$dir/$l.traineddata.part"
+    echo "   $l"
+    curl -fL $PROGRESS "https://github.com/tesseract-ocr/tessdata/raw/main/$l.traineddata" -o "$dir/$l.traineddata.part"
     mv "$dir/$l.traineddata.part" "$dir/$l.traineddata"
   done
   ok "Języki OCR w $dir"
@@ -167,4 +177,4 @@ case "$WHAT" in
   all) install_tools; install_audiveris; install_ocr; install_oemer ;;
 esac
 
-printf '\n\033[32mGotowe. Uruchom aplikację „Nuty → MusicXML”.\033[0m\n'
+if [[ -n "${NUTY_GUI:-}" ]]; then ok "Gotowe"; else printf '\n\033[32mGotowe. Uruchom aplikację „Nuty → MusicXML”.\033[0m\n'; fi

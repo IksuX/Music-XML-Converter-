@@ -37,19 +37,29 @@ jobs:
           plutil -lint "$APP/Contents/Info.plist"
           codesign --verify --deep "$APP"
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Engine installer (as the app runs it)
+        run: |
+          APP="build/Nuty MusicXML.app"
+          test -f "$APP/Contents/Resources/zainstaluj-silniki.sh"
+          for what in narzedzia ocr audiveris; do
+            NUTY_GUI=1 /bin/bash "$APP/Contents/Resources/zainstaluj-silniki.sh" $what < /dev/null
+          done
+          SUP="$HOME/Library/Application Support/NutyMusicXML"
+          test -x "$SUP/tools-venv/bin/python3"
+          ls "$HOME/Library/Application Support/AudiverisLtd/audiveris/tessdata"
+          A=/Applications/Audiveris.app; [ -d "$A" ] || A="$HOME/Applications/Audiveris.app"
+          test -x "$A/Contents/MacOS/Audiveris"
+          # second run must detect what is already installed
+          NUTY_GUI=1 /bin/bash "$APP/Contents/Resources/zainstaluj-silniki.sh" narzedzia | grep "już jest"
 
       - name: Vector reader test
         run: |
-          python -m venv /tmp/tv && /tmp/tv/bin/pip install -q "pymupdf>=2.1"
-          /tmp/tv/bin/python -c "
+          "$HOME/Library/Application Support/NutyMusicXML/tools-venv/bin/python3" -I -c "
           import pymupdf, sys, tempfile, os
           sys.path.insert(0, 'Resources'); import wektor_pdf as w
           d = pymupdf.open(); d.new_page().insert_text((72, 72), 'test')
           p = os.path.join(tempfile.mkdtemp(), 't.pdf'); d.save(p)
-          x, warn = w.convert(p); assert x is None; print('OK', w.VERSION)"
+          x, warn = w.convert(p); assert x is None; print('OK', w.VERSION, pymupdf.__version__)"
 
       - name: Package
         run: |

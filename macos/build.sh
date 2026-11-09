@@ -4,7 +4,7 @@
 #   ./build.sh --install  → buduje i kopiuje do /Applications
 set -euo pipefail
 
-VERSION="0.5.0"
+VERSION="0.5.1"
 APP_NAME="Nuty MusicXML"
 EXE="NutyMusicXML"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -42,6 +42,7 @@ fi
 sed "s/__VERSION__/$VERSION/g" "$ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp "$ROOT/Resources/wektor_pdf.py" "$APP/Contents/Resources/wektor_pdf.py"
+cp "$ROOT/zainstaluj-silniki.sh" "$APP/Contents/Resources/zainstaluj-silniki.sh"
 cp -R "$ROOT/Resources/Player" "$APP/Contents/Resources/Player"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 

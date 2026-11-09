@@ -5,6 +5,7 @@ final class ViewState: ObservableObject {
     @Published var selection = Set<UUID>()
     @Published var dropTargeted = false
     @Published var showLog = false
+    @Published var hideSetupBanner = false
 }
 
 struct ContentView: View {
@@ -22,6 +23,10 @@ struct ContentView: View {
                 updateBanner(info)
                 Divider()
             }
+            if conv.audiverisPath == nil && conv.oemerPath == nil && !ui.hideSetupBanner {
+                setupBanner
+                Divider()
+            }
             fileArea
                 .dropDestination(for: URL.self) { urls, _ in
                     conv.add(urls: urls)
@@ -37,6 +42,10 @@ struct ContentView: View {
             conv.refreshEngines()
             upd.converter = conv
             upd.checkOnLaunch()
+            conv.autoInstallIfNeeded()
+        }
+        .onChange(of: conv.isInstalling) { installing in
+            if installing { withAnimation { ui.showLog = true } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openPlayerRequested)) { note in
             if let url = note.object as? URL { openWindow(value: url) }
@@ -70,6 +79,31 @@ struct ContentView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    // MARK: Silniki
+
+    private var setupBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "shippingbox").foregroundStyle(.orange)
+            Text("Do skanów i zdjęć potrzebne są silniki rozpoznawania nut (Audiveris, oemer). PDF-y z programów nutowych działają bez nich.")
+                .font(.callout).lineLimit(2)
+            Spacer()
+            if conv.isInstalling {
+                ProgressView().controlSize(.small)
+                Text("Instaluję \(Converter.installLabels[conv.installingWhat] ?? "")…").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Button("Później") { ui.hideSetupBanner = true }
+                Button("Zainstaluj silniki") { conv.install("all") }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(conv.isRunning)
+                    .help("Pobiera i instaluje Audiveris z językami OCR oraz oemer (łącznie ok. 600 MB). Postęp widać w logu.")
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.08))
     }
 
     // MARK: Aktualizacja
@@ -253,7 +287,12 @@ struct ContentView: View {
                     .frame(maxWidth: 330, alignment: .trailing)
             }
 
-            if conv.isRunning {
+            if conv.isInstalling {
+                ProgressView().controlSize(.small)
+                Text("Instaluję \(Converter.installLabels[conv.installingWhat] ?? "")…")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("Przerwij instalację", role: .cancel) { conv.cancelInstall() }
+            } else if conv.isRunning {
                 ProgressView().controlSize(.small)
                 Button("Przerwij", role: .cancel) { conv.cancel() }
             } else {
@@ -349,13 +388,17 @@ struct SettingsView: View {
                 if conv.vectorReady {
                     Label("Czytnik gotowy", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green)
                 } else {
-                    Label("Brak czytnika — uruchom ./zainstaluj-silniki.sh narzedzia", systemImage: "xmark.circle.fill")
+                    Label("Brak czytnika", systemImage: "xmark.circle.fill")
                         .font(.caption).foregroundStyle(.red)
                 }
+                installButton(conv.vectorReady ? "Przeinstaluj czytnik" : "Zainstaluj czytnik (ok. 80 MB)",
+                              "narzedzia", force: conv.vectorReady)
             }
             Section("Audiveris") {
                 TextField("Własna ścieżka (puste = szukaj automatycznie)", text: $conv.customAudiveris)
                 pathStatus(conv.audiverisPath)
+                installButton(conv.audiverisPath == nil ? "Zainstaluj Audiveris (ok. 200 MB)" : "Zaktualizuj Audiveris",
+                              "audiveris", force: conv.audiverisPath != nil)
                 TextField("Języki tekstu pod nutami (OCR)", text: $conv.ocrLanguages)
                     .help("Kody Tesseracta połączone plusem, np. pol+eng albo pol+lat+deu")
                 ocrStatus
@@ -363,6 +406,8 @@ struct SettingsView: View {
             Section("oemer") {
                 TextField("Własna ścieżka (puste = szukaj automatycznie)", text: $conv.customOemer)
                 pathStatus(conv.oemerPath)
+                installButton(conv.oemerPath == nil ? "Zainstaluj oemer (ok. 400 MB)" : "Przeinstaluj oemer",
+                              "oemer", force: conv.oemerPath != nil)
                 Toggle("Prostowanie krzywych zdjęć (deskew)", isOn: $conv.oemerDeskew)
                     .help("Dla czystych PDF-ów można wyłączyć — będzie szybciej.")
                 Toggle("Łącz strony PDF w jeden plik", isOn: $conv.mergeOemerPages)
@@ -383,8 +428,18 @@ struct SettingsView: View {
                 }
             }
             Section {
-                Button("Sprawdź ponownie") { conv.refreshEngines() }
-                Text("Silniki instaluje skrypt zainstaluj-silniki.sh z paczki aplikacji.")
+                HStack {
+                    Button("Zainstaluj wszystko") { conv.install("all") }
+                        .disabled(conv.isInstalling || conv.isRunning)
+                    Button("Sprawdź ponownie") { conv.refreshEngines() }
+                    Spacer()
+                    if conv.isInstalling {
+                        ProgressView().controlSize(.small)
+                        Button("Przerwij") { conv.cancelInstall() }
+                    }
+                }
+                Text(conv.isInstalling ? "Instaluję \(Converter.installLabels[conv.installingWhat] ?? "")… — postęp widać w logu w głównym oknie."
+                                       : "Instalacja pobiera pliki z internetu i nie wymaga hasła administratora.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -399,10 +454,16 @@ struct SettingsView: View {
             Label("Pliki OCR zainstalowane", systemImage: "checkmark.circle.fill")
                 .font(.caption).foregroundStyle(.green)
         } else {
-            Label("Brak plików OCR: \(missing.joined(separator: ", ")) — uruchom ./zainstaluj-silniki.sh ocr",
+            Label("Brak plików OCR: \(missing.joined(separator: ", ")) — tekst pod nutami nie zostanie odczytany",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.caption).foregroundStyle(.orange)
+            installButton("Pobierz języki (pol, eng, lat, deu)", "ocr")
         }
+    }
+
+    private func installButton(_ title: String, _ what: String, force: Bool = false) -> some View {
+        Button(title) { conv.install(what, force: force) }
+            .disabled(conv.isInstalling || conv.isRunning)
     }
 
     @ViewBuilder

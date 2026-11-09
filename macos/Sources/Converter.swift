@@ -69,6 +69,8 @@ final class Converter: ObservableObject {
     @Published var audiverisPath: String?
     @Published var oemerPath: String?
     @Published var vectorReady = false
+    @Published var isInstalling = false
+    @Published var installingWhat = ""
 
     // Ustawienia zapamiętywane między uruchomieniami.
     @Published var engine: EngineChoice = .audiveris { didSet { save(engine.rawValue, "engine") } }
@@ -85,6 +87,7 @@ final class Converter: ObservableObject {
     private func save(_ value: Any, _ key: String) { UserDefaults.standard.set(value, forKey: key) }
 
     private let runner = ProcessRunner()
+    private let installRunner = ProcessRunner()
     private var task: Task<Void, Never>?
 
     init() {
@@ -118,12 +121,74 @@ final class Converter: ObservableObject {
         if engine.usesAudiveris && audiverisPath == nil { missing.append("Audiveris") }
         if engine.usesOemer && oemerPath == nil { missing.append("oemer") }
         guard !missing.isEmpty else { return nil }
-        return "Brak silnika: \(missing.joined(separator: ", ")). Uruchom zainstaluj-silniki.sh albo wskaż ścieżkę w Ustawieniach (⌘,)."
+        return "Brak silnika: \(missing.joined(separator: ", ")). Zainstaluj go w Ustawieniach (⌘,)."
     }
 
     var canStart: Bool {
-        !isRunning && jobs.contains { $0.status == .waiting } && missingEngineMessage == nil
+        !isRunning && !isInstalling && jobs.contains { $0.status == .waiting } && missingEngineMessage == nil
             && (outputLocation == .nextToSource || !outputFolder.isEmpty)
+    }
+
+    // MARK: - Instalacja silników (skrypt zainstaluj-silniki.sh dołączony do aplikacji)
+
+    static let installLabels = ["narzedzia": "czytnik PDF", "audiveris": "Audiveris", "ocr": "języki OCR",
+                                "oemer": "oemer", "all": "wszystkie silniki"]
+
+    var installScript: String? { Bundle.main.path(forResource: "zainstaluj-silniki", ofType: "sh") }
+
+    func install(_ what: String, force: Bool = false) {
+        guard !isInstalling, !isRunning else { return }
+        guard let script = installScript else {
+            append("⚠︎ Brak skryptu instalacyjnego w aplikacji — przeinstaluj aplikację.")
+            return
+        }
+        isInstalling = true
+        installingWhat = what
+        let label = Self.installLabels[what] ?? what
+        append("▶︎ Instaluję: \(label)")
+        let log = logger("instalacja")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let r = try await self.installRunner.run(executable: "/bin/bash",
+                                                         arguments: [script, what] + (force ? ["--force"] : []),
+                                                         extraEnvironment: ["NUTY_GUI": "1"],
+                                                         onLine: log)
+                try? await Task.sleep(nanoseconds: 300_000_000)   // niech dojdą ostatnie linie logu
+                self.append(r.exitCode == 0 ? "✓ Zainstalowano: \(label)"
+                                            : "⚠︎ Instalacja (\(label)) nie powiodła się, kod \(r.exitCode) — szczegóły wyżej w logu")
+            } catch {
+                self.append("⚠︎ Nie udało się uruchomić instalatora: \(error.localizedDescription)")
+            }
+            self.isInstalling = false
+            self.installingWhat = ""
+            self.refreshEngines()
+        }
+    }
+
+    func cancelInstall() {
+        installRunner.cancel()
+        append("Przerwano instalację.")
+    }
+
+    /// Przy starcie: bez czytnika PDF (albo ze zbyt starym PyMuPDF) — instaluje go sam, w tle.
+    func autoInstallIfNeeded() {
+        guard installScript != nil, !isInstalling, !isRunning else { return }
+        if let py = EngineLocator.toolsPython {
+            let checker = ProcessRunner()
+            Task { [weak self] in
+                let r = try? await checker.run(executable: py, arguments: ["-I", "-c",
+                    "import pymupdf, sys; sys.exit(tuple(map(int, pymupdf.VersionBind.split('.')[:2])) < (2, 1))"],
+                    onLine: { _ in })
+                guard let self, let r, r.exitCode != 0 else { return }
+                self.append("ℹ︎ Czytnik PDF wymaga aktualizacji — aktualizuję w tle.")
+                self.install("narzedzia")
+            }
+        } else if !UserDefaults.standard.bool(forKey: "autoInstalledTools") {
+            UserDefaults.standard.set(true, forKey: "autoInstalledTools")
+            append("ℹ︎ Pierwsze uruchomienie: instaluję czytnik PDF z programów nutowych (ok. 80 MB, jednorazowo).")
+            install("narzedzia")
+        }
     }
 
     // MARK: - Lista plików

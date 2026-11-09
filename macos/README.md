@@ -1,4 +1,4 @@
-# Nuty → MusicXML 0.5.0
+# Nuty → MusicXML 0.5.1
 
 Aplikacja na macOS do zamiany PDF-ów, skanów i zdjęć nut na pliki **MusicXML** (`.musicxml`). Takie pliki otworzysz w MuseScore, Sibeliusie, Finale, Dorico albo Logicu.
 
@@ -27,8 +27,10 @@ Pobierz `NutyMusicXML-macOS-<wersja>.zip` z zakładki **Releases** repozytorium 
 ```bash
 xattr -dr com.apple.quarantine "Nuty MusicXML.app"   # aplikacja nie jest podpisana przez Apple
 mv "Nuty MusicXML.app" /Applications/
-bash zainstaluj-silniki.sh                            # czytnik PDF + Audiveris + oemer (ok. 450 MB)
+open "/Applications/Nuty MusicXML.app"
 ```
+
+**Silniki instaluje sama aplikacja:** przy pierwszym uruchomieniu pobiera w tle czytnik PDF z programów nutowych (ok. 80 MB). Do skanów i zdjęć kliknij **Zainstaluj silniki** na pasku w oknie albo pojedyncze przyciski w Ustawieniach (⌘,): Audiveris (ok. 200 MB), języki OCR, oemer (ok. 400 MB). Postęp widać w logu na dole okna; nie trzeba hasła administratora. Skrypt `zainstaluj-silniki.sh` jest też w paczce, gdybyś wolał Terminal.
 
 Bez polecenia `xattr` macOS powie, że aplikacja „jest uszkodzona” — to tylko blokada dla programów spoza App Store bez podpisu Apple. Aplikacja działa na Macach z Apple Silicon i z Intelem (macOS 13+).
 
@@ -85,7 +87,7 @@ Rozpoznawanie obrazu nigdy nie działa w 100%. Typowo:
 
 Przed użyciem otwórz plik w MuseScore i sprawdź rytmy, znaki przykluczowe i tekst.
 
-**Tekst pod nutami** odczytuje tylko Audiveris, i to wyłącznie, gdy ma pliki językowe OCR. Instaluje je `./zainstaluj-silniki.sh ocr` (polski, angielski, łaciński, niemiecki). Języki dla danego materiału ustawisz w Ustawieniach (domyślnie `pol+eng`; dla łaciny dopisz `lat`).
+**Tekst pod nutami** odczytuje tylko Audiveris, i to wyłącznie, gdy ma pliki językowe OCR. Instaluje je przycisk **Pobierz języki** w Ustawieniach (albo `./zainstaluj-silniki.sh ocr`) — polski, angielski, łaciński, niemiecki). Języki dla danego materiału ustawisz w Ustawieniach (domyślnie `pol+eng`; dla łaciny dopisz `lat`).
 
 **Wskazówki do skanowania:** 300 dpi, skala szarości, kartka jak najprościej, bez cienia od grzbietu książki.
 
