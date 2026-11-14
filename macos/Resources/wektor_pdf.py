@@ -25,7 +25,7 @@ import os
 import re
 import sys
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 from fractions import Fraction as F
 from xml.sax.saxutils import escape
 
@@ -34,14 +34,14 @@ try:
 except ImportError:  # starsze wersje
     import fitz as pymupdf  # type: ignore
 
-VERSION = "0.5.0"
+VERSION = "0.5.2"
 
 # --------------------------------------------------------------------------- fonty nutowe
 
 # Fonts whose glyphs are music symbols (not text).
 MUSIC_FONT_HINTS = ("maestro", "petrucci", "jazz", "broadway", "engraver font",
                     "bravura", "leland", "petaluma", "finale", "sonata", "opus",
-                    "musescore", "emmentaler", "feta", "gonville", "november")
+                    "musescore", "emmentaler", "feta", "gonville", "november", "ascore")
 # EngraverTextT is a Finale *text* font (used, e.g., for the note in "q = 120").
 
 # Glyph mapping in the Maestro font family (Finale).
@@ -63,7 +63,8 @@ TIME_DIGITS = set("0123456789")
 SMUFL = {
     0xE0A4: "œ", 0xE0A3: "˙", 0xE0A2: "w", 0xE0A0: "w", 0xE0A9: "¿",
     0xE100: "Û", 0xE101: "Û", 0xE103: "·", 0xE104: "·",
-    0xE4E3: "∑", 0xE4E4: "Ó", 0xE4E5: "Œ", 0xE4E6: "‰", 0xE4E7: "≈", 0xE4E8: "®",
+    0xE4E3: "∑", 0xE4E4: "½",   # SMuFL rozróżnia pauzę półnutową — nie zgadujemy z położenia
+    0xE4E5: "Œ", 0xE4E6: "‰", 0xE4E7: "≈", 0xE4E8: "®",
     0xE240: "j", 0xE241: "J", 0xE242: "r", 0xE243: "R", 0xE244: "Â", 0xE245: "Ù",
     0xE260: "b", 0xE261: "n", 0xE262: "#", 0xE263: "Ü", 0xE264: "º",
     0xE050: "&", 0xE052: "V", 0xE062: "?", 0xE05C: "B",
@@ -73,6 +74,11 @@ SMUFL = {
 }
 for _i in range(10):
     SMUFL[0xE080 + _i] = str(_i)
+
+
+# AScore (Logic Pro): własne kody znaków → odpowiedniki Maestro. ")" to małe „8” pod kluczem (klucz tenorowy).
+ASCORE = {"!": "j", '"': "J", "#": ".", "%": "?", "&": "&", ",": "w", "-": "˙", ".": "œ",
+          "D": "Œ", "E": "‰", "F": "≈", "O": "b", "P": "n", "Q": "#", "\\": "4", ")": "⁸"}
 
 
 def is_music_font(name: str) -> bool:
@@ -172,6 +178,10 @@ class Event:
     slash: bool = False
     cue: bool = False
     xhead: bool = False
+    ry: float | None = None            # wysokość pauzy (do podziału na głosy)
+    v2: bool = False                   # drugi głos na tej samej pięciolinii (laski w dół)
+    tuplet: tuple | None = None        # (actual, normal), np. (3, 2) dla trioli
+    tuplet_pos: str | None = None      # "start" / "stop" / "single"
 
 
 @dataclass
@@ -233,13 +243,31 @@ def read_page(page, pno: int):
                         continue
                     if music:
                         cp = ord(c)
-                        if 0xE000 <= cp <= 0xF8FF:
+                        if "ascore" in font.lower():
+                            RECT_REST_PAGES.add(pno)
+                            c = ASCORE.get(c)
+                            if c is None:
+                                continue   # dynamika, fermata, akcent
+                        elif 0xE000 <= cp <= 0xF8FF:
                             c = SMUFL.get(cp)
                             if c is None:
                                 continue   # inny znak SMuFL (np. nuta w oznaczeniu tempa)
                         glyphs.append(Glyph(c, ch["origin"][0], ch["origin"][1], ch["bbox"][2], s["size"]))
                     else:
                         texts.append(TextChar(c, ch["bbox"][0], ch["bbox"][2], ch["origin"][1], s["size"], font, span_no))
+
+    # klucz wiolinowy z małą „8” pod spodem (Logic rysuje ją osobnym znakiem) = klucz tenorowy
+    for o in [g for g in glyphs if g.c == "⁸"]:
+        clef = next((g for g in glyphs if g.c == "&" and abs(g.x - o.x) < o.size * 0.6 and 0 < o.y - g.y < o.size * 1.2), None)
+        if clef is not None:
+            clef.c = "V"
+    glyphs = [g for g in glyphs if g.c != "⁸"]
+    # nuta w oznaczeniu tempa („♩ = 96”) — w Logicu to ten sam znak co zwykła główka
+    eqs = [t for t in texts if t.c == "="]
+    if eqs:
+        glyphs = [g for g in glyphs
+                  if not (g.c in ("œ", "˙") and any(abs(t.y - g.y) < g.size * 0.6 and 0 < t.x0 - g.x < g.size * 1.6
+                                                    for t in eqs))]
 
     hlines, vlines, polys, rects = [], [], [], []
     for d in page.get_drawings():
@@ -398,7 +426,7 @@ def system_glyphs(staff, glyphs, above, below):
 def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: dict):
     sp = staff.sp
     h = sp / 2
-    gs = system_glyphs(staff, glyphs, 4.5 * sp, 4.5 * sp)
+    gs = system_glyphs(staff, glyphs, 6 * sp, 6 * sp)   # flagi długich lasek w dół sięgają niżej niż 4.5 odstępu
     gs.sort(key=lambda g: g.x)
 
     # --- barlines: vertical lines spanning the full staff height
@@ -410,8 +438,15 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
         return any(g.x - 0.8 <= x <= g.x1 + 0.8 and (abs(g.y - y0) < h * 1.3 or abs(g.y - y1) < h * 1.3)
                    for g in head_glyphs)
 
+    def spans(y0, y1):
+        # barline drawn exactly over this staff, or (MuseScore, connected barlines) from this staff's top
+        # down to the next staff in the system
+        # (Logic: from the previous staff's top down to this staff's bottom)
+        return (abs(y0 - staff.top) < 0.6 and (abs(y1 - staff.bottom) < 0.6 or y1 > staff.bottom + 2 * sp)) \
+            or (abs(y1 - staff.bottom) < 0.6 and y0 < staff.top - 2 * sp)
+
     full = [w for (x, y0, y1, w) in vlines
-            if staff.x0 - 2 <= x <= staff.x1 + 2 and abs(y0 - staff.top) < 0.6 and abs(y1 - staff.bottom) < 0.6
+            if staff.x0 - 2 <= x <= staff.x1 + 2 and spans(y0, y1)
             and not touches_head(x, y0, y1)]
     bar_w = max(full) if full else 0.0
 
@@ -420,7 +455,7 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
             continue
         if staff.lines:
             stem_like = touches_head(x, y0, y1) and (w < 0.33 or (bar_w and w < bar_w * 0.8))
-            if abs(y0 - staff.top) < 0.6 and abs(y1 - staff.bottom) < 0.6 and not stem_like:
+            if spans(y0, y1) and not stem_like:
                 bars.append((x, w))
                 continue
             if x > staff.xlines + 2 and w > 0.6 and y0 < staff.bottom + sp and y1 > staff.top - sp:
@@ -495,9 +530,13 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
         if ev.base == 1:
             # flags
             nflag = 0
+            fl_ys = []
             for g in gs:
                 if g.c in FLAGS and abs(g.x - st.x) < 1.5:
                     nflag = max(nflag, FLAGS[g.c])
+                    if all(abs(g.y - y) > 0.5 for y in fl_ys):
+                        fl_ys.append(g.y)
+            nflag = max(nflag, len(fl_ys))   # Logic: szesnastka = dwie osobne chorągiewki ósemki
             # beams: polygons covering the stem x near its free end
             end = st.y0 if up else st.y1
             nbeam = 0
@@ -552,14 +591,31 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
     # rests
     for g in gs:
         if g.c in RESTS:
-            events.append(Event(x=g.x, x1=g.x1, rest=True, base=RESTS[g.c], cue=g.size < cue_size - 1))
+            events.append(Event(x=g.x, x1=g.x1, rest=True, base=RESTS[g.c], cue=g.size < cue_size - 1, ry=g.y))
         elif g.c in ("Ó", "î"):
             # whole rest hangs below line 4 (counting from the bottom), half rest sits on line 3
             line4 = staff.top + sp
             whole = abs(g.y - line4) < abs(g.y - staff.mid)
-            events.append(Event(x=g.x, x1=g.x1, rest=True, base=F(4) if whole else F(2), measure_rest=whole))
+            events.append(Event(x=g.x, x1=g.x1, rest=True, base=F(4) if whole else F(2), measure_rest=whole, ry=g.y))
         elif g.c == "∑":
             events.append(Event(x=g.x, x1=g.x1, rest=True, base=F(4), measure_rest=True))
+        elif g.c == "½":
+            events.append(Event(x=g.x, x1=g.x1, rest=True, base=F(2), ry=g.y))
+
+    if staff.page in RECT_REST_PAGES:
+        for pl in polys:
+            w_, h_ = pl.x1 - pl.x0, pl.y1 - pl.y0
+            if pl.curved or not (0.8 * sp < w_ < 2.2 * sp and 0.3 * sp < h_ < 0.75 * sp):
+                continue
+            if not (staff.top - 0.3 <= pl.y0 and pl.y1 <= staff.bottom + 0.3):
+                continue
+            if any(pl.x0 - 0.6 <= vx <= pl.x1 + 0.6 and vy0 - 0.6 <= pl.y1 and vy1 + 0.6 >= pl.y0 and vw < 0.6
+                   for (vx, vy0, vy1, vw) in vlines):
+                continue   # odcinek belki przy lasce, nie pauza
+            line4 = staff.top + sp
+            whole = abs(pl.y0 - line4) < abs(pl.y1 - staff.mid)
+            events.append(Event(x=pl.x0, x1=pl.x1, rest=True, base=F(4) if whole else F(2),
+                                measure_rest=whole, ry=(pl.y0 + pl.y1) / 2))
 
     # slash strokes drawn as lines (rhythm notation)
     for p in slashes:
@@ -593,6 +649,7 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
 
     for e in events:
         e.dur = e.base * (F(3, 2) if e.dots == 1 else (F(7, 4) if e.dots == 2 else 1))
+    apply_tuplets(staff, events, sp)
 
     # --- accidentals (attached to notes) and key signature
     accs = [g for g in gs if g.c in ACCIDENTALS and staff.top - 3 * sp < g.y < staff.bottom + 3 * sp]
@@ -654,6 +711,14 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
 
     # --- dzielimy na takty
     bars.sort()
+    # the same barline drawn twice (Logic: one segment per staff + one joining the staves) is one line
+    dedup = []
+    for x, w in bars:
+        if dedup and abs(x - dedup[-1][0]) < 0.4:
+            dedup[-1] = (dedup[-1][0], max(dedup[-1][1], w))
+        else:
+            dedup.append((x, w))
+    bars = dedup
     merged = []
     for x, w in bars:
         if merged and x - merged[-1][1] < 4.5:
@@ -697,14 +762,29 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
                        for g in gs)
         return has_sign or (m.x1 - m.x0) < 6 * sp
 
-    while len(measures) > 1 and is_header(measures[0]):
+    while len(measures) > 1 and is_header(measures[0]) and (measures[0].x1 - measures[0].x0) < 15 * sp:
         lead = measures.pop(0)
         if lead.left_bar:
             measures[0].left_bar = measures[0].left_bar or lead.left_bar
         measures[0].x0 = lead.x0
+    # the same in the middle of a system: a time/key change standing between a barline and a start-repeat
+    # barline forms its own empty segment → belongs to the following measure
+    i = 1
+    while i < len(measures) - 1:
+        seg = measures[i]
+        if not seg.events and is_header(seg) and (seg.x1 - seg.x0) < 6 * sp:
+            nxt = measures[i + 1]
+            nxt.x0 = seg.x0
+            nxt.left_bar = nxt.left_bar or seg.left_bar
+            if seg.right_bar in ("double", "final") and not measures[i - 1].right_bar:
+                measures[i - 1].right_bar = "double"
+            measures.pop(i)
+            continue
+        i += 1
     # empty segment after the last barline (staff ends at the barline)
-    while len(measures) > 1 and not measures[-1].events and measures[-1].x1 - measures[-1].x0 < 3 * sp:
-        measures.pop()
+    while len(measures) > 1 and ((not measures[-1].events and measures[-1].x1 - measures[-1].x0 < 3 * sp)
+                                 or measures[-1].x1 - measures[-1].x0 < 1.6 * sp):
+        measures.pop()   # nic albo okruch (znak przy kresce końcowej) za ostatnią kreską
 
     # key: loose accidentals before the first event of the measure
     for meas in measures:
@@ -723,6 +803,15 @@ def analyse_staff(staff: Staff, glyphs, vlines, polys, warn: Warnings, state: di
         for tx, t in times:
             if meas.x0 - 1 <= tx < first_x + 1:
                 meas.time = t
+    # time signature standing after the last note of a measure (before the next barline, e.g. in front of
+    # a start-repeat) is the change for the following measure
+    for k, meas in enumerate(measures[:-1]):
+        last_x = max((e.x1 for e in meas.events), default=None)
+        if last_x is None:
+            continue
+        for tx, t in times:
+            if last_x < tx <= meas.x1 + 1 and measures[k + 1].time is None:
+                measures[k + 1].time = t
 
     # pitches
     for meas in measures:
@@ -844,6 +933,106 @@ def group_lines(chars: list[TextChar], tol: float):
 
 # --------------------------------------------------------------------------- main conversion
 
+def find_tuplet_marks(texts):
+    """Tuplet numbers: a lone digit 3/5/6/7 in an italic text font (MuseScore: Edwin-Italic; Finale/Sibelius
+    similarly), forming its own text fragment. Measure numbers are filtered out later by position."""
+    by_span = {}
+    for t in texts:
+        by_span.setdefault(t.span, []).append(t)
+    marks = []
+    for span, chars in by_span.items():
+        txt = "".join(c.c for c in chars).strip()
+        if txt in ("3", "5", "6", "7") and any("Italic" in c.font or "italic" in c.font for c in chars):
+            c = [c for c in chars if c.c.strip()][0]
+            marks.append(((c.x0 + c.x1) / 2, c.y - c.size * 0.35, int(txt)))
+    return marks
+
+
+def apply_tuplets(staff, events, sp):
+    marks = TUPLET_MARKS.get(staff.page, [])
+    if not marks:
+        return
+    hl = HLINES_PAGE.get(staff.page, [])
+    evs = sorted([e for e in events if not e.cue], key=lambda e: e.x)
+    for (mx, my, n) in marks:
+        if not (staff.top - 5 * sp < my < staff.bottom + 5 * sp) or not staff.in_band(my):
+            continue
+        if mx < staff.x0 + 8 * sp:          # numer taktu na początku systemu
+            continue
+        # klamra: poziome odcinki na wysokości cyfry, po obu jej stronach
+        left = [h for h in hl if abs(h[2] - my) < 0.6 * sp and h[1] <= mx and mx - h[1] < 3 * sp and h[1] - h[0] < 25 * sp]
+        right = [h for h in hl if abs(h[2] - my) < 0.6 * sp and h[0] >= mx and h[0] - mx < 3 * sp and h[1] - h[0] < 25 * sp]
+        group = []
+        if left and right:
+            x0 = min(h[0] for h in left) - 1.2 * sp
+            x1 = max(h[1] for h in right) + 0.5 * sp
+            group = [e for e in evs if x0 <= e.x <= x1 and e.tuplet is None]
+        if not group:
+            # bez klamry (np. ósemki pod belką): n najbliższych zdarzeń wokół cyfry
+            cand = [e for e in evs if e.tuplet is None]
+            if len(cand) < 2:
+                continue
+            centre = min(range(len(cand)), key=lambda i: abs((cand[i].x + cand[i].x1) / 2 - mx))
+            lo = max(0, centre - (n - 1) // 2)
+            group = cand[lo:lo + n]
+            if abs((group[0].x + group[-1].x1) / 2 - mx) > 3 * sp:
+                continue
+        if not group:
+            continue
+        normal = 2 if n == 3 else (4 if n in (5, 6, 7) else n - 1)
+        for e in group:
+            e.dur = e.dur * F(normal, n)
+            e.tuplet = (n, normal)
+        if len(group) == 1:
+            group[0].tuplet_pos = "single"
+        else:
+            group[0].tuplet_pos = "start"
+            group[-1].tuplet_pos = "stop"
+
+
+def fix_stray_rests(grp, idxs, per_part):
+    """Logic sometimes draws a voice's rest far from its own staff, inside the neighbour's band: one staff's
+    measure is then too long by exactly that rest and the adjacent staff's measure too short by the same."""
+    order = [pi for pi in idxs if pi in per_part]
+    if len(order) < 2:
+        return
+    n = min(len(per_part[pi]) for pi in order)
+    for k in range(n):
+        tot = {pi: sum((e.dur for e in per_part[pi][k].events if not e.cue), F(0)) for pi in order}
+        vals = list(tot.values())
+        exp = max(set(vals), key=vals.count)
+        for a_i, pa in enumerate(order):
+            if tot[pa] <= exp:
+                continue
+            ma = per_part[pa][k]
+            st = ma.staff
+            for nb in (a_i - 1, a_i + 1):
+                if not (0 <= nb < len(order)):
+                    continue
+                pb = order[nb]
+                extra = tot[pa] - exp
+                if tot[pb] != exp - extra:
+                    continue
+                cands = [r for r in ma.events if r.rest and r.dur == extra and r.ry is not None and st is not None]
+                if cands:
+                    # the one nearest to the neighbour's side
+                    r = min(cands, key=lambda r: r.ry) if nb < a_i else max(cands, key=lambda r: r.ry)
+                    ma.events.remove(r)
+                    mb = per_part[pb][k]
+                    mb.events.append(r)
+                    mb.events.sort(key=lambda e: e.x)
+                    tot[pa] -= extra
+                    tot[pb] += extra
+                    break
+            if tot[pa] > exp and st is not None:
+                extra = tot[pa] - exp
+                far = [r for r in ma.events if r.rest and r.dur == extra and r.ry is not None
+                       and (r.ry < st.top - 4 * st.sp or r.ry > st.bottom + 4 * st.sp)]
+                if far:
+                    ma.events.remove(far[0])
+                    tot[pa] -= extra
+
+
 def convert(pdf_path: str):
     doc = pymupdf.open(pdf_path)
     warn = Warnings()
@@ -852,6 +1041,7 @@ def convert(pdf_path: str):
     total_glyphs = 0
     meta = {"title": None, "lyricist": None, "composer": None, "tempo": None}
 
+    RECT_REST_PAGES.clear()
     for pno, page in enumerate(doc):
         glyphs, texts, hlines, vlines, polys, rects = read_page(page, pno)
         total_glyphs += len(glyphs)
@@ -860,6 +1050,12 @@ def convert(pdf_path: str):
 
     if total_glyphs < 20 or not any(pd[8] for pd in page_data):
         return None, ["Brak nut wektorowych"]
+
+    TUPLET_MARKS.clear()
+    HLINES_PAGE.clear()
+    for (pno, page, glyphs, texts, hlines, vlines, polys, rects, staves) in page_data:
+        HLINES_PAGE[pno] = hlines
+        TUPLET_MARKS[pno] = find_tuplet_marks(texts)
 
     # ---- systems: staves joined by the system's start line or a bracket
     SYSTEM_OF.clear()
@@ -903,6 +1099,7 @@ def convert(pdf_path: str):
             all_measures.extend(ms)
         if not per_part:
             continue
+        fix_stray_rests(grp, idxs, per_part)
         ref = max(per_part.values(), key=len)
         count = len(ref)
         for pi, ms in per_part.items():
@@ -955,7 +1152,8 @@ def convert(pdf_path: str):
         processed.append(out)
         bad += nbad
         total += len(out)
-    if total == 0 or bad > max(3, total * 0.3):
+    LAST_PARTS[:] = [(names[i], ms) for i, ms in enumerate(processed)]
+    if total == 0 or (bad > max(3, total * 0.3) and not os.environ.get("NUTY_FORCE")):
         return None, ["NIEPEWNY", f"{bad} z {total} taktów ma złą długość — ten PDF wymaga rozpoznawania obrazu"]
     return write_xml(processed, names, meta, 24), warn
 
@@ -1007,6 +1205,10 @@ def assign_parts(clefs, profile, n):
 # --------------------------------------------------------------------------- text → measures
 
 VLINES_CTX: list = []
+LAST_PARTS: list = []        # do diagnostyki
+RECT_REST_PAGES: set = set()   # strony z Logica: pauzy cała/półnutowa narysowane prostokątami
+TUPLET_MARKS: dict = {}   # pno -> [(x_center, y, n)] — cyfry triol/kwintol (kursywa nad/pod nutami)
+HLINES_PAGE: dict = {}    # pno -> poziome odcinki strony (klamry triol)
 SYSTEM_OF: dict = {}
 SYSTEM_TOP: set = set()   # id() of the staves that are the topmost staff of their system
 
@@ -1087,7 +1289,36 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
         if m_t and not meta.get("tempo"):
             meta["tempo"] = int(m_t.group(1))
         page_w = page.rect.width
-        for ln_y, chars in group_lines(head, 1.5):
+        segs = []
+        for ln_y, chars in sorted(group_lines(head, 1.5), key=lambda r: r[0]):
+            chars = sorted(chars, key=lambda c: c.x0)
+            cur = [chars[0]]
+            for c in chars[1:]:
+                if c.x0 - cur[-1].x1 > max(3 * c.size, 25):   # np. podtytuł na środku i „muz. …” po prawej
+                    segs.append((ln_y, cur))
+                    cur = []
+                cur.append(c)
+            segs.append((ln_y, cur))
+        # tempo marks above the first staff ("♩ = 60" … "♩ = 96"): each one to the measure below it
+        tempos = []
+        for _, chs in segs:
+            for tk in cluster_text(chs, 3.0):
+                mt = re.fullmatch(r"=\s*(\d{2,3})", token_text(tk).strip())
+                if mt:
+                    tempos.append((tk[0].x0, int(mt.group(1))))
+        if tempos:
+            tempos.sort()
+            meta["tempo"] = tempos[0][1]
+            top_ms = [m for m in page_measures if m.staff is first]
+            for tx, tv in tempos:
+                mm = next((m for m in top_ms if m.x0 - 2 * sp <= tx < m.x1), None)
+                if mm is not None:
+                    mm.tempo = tv
+        big = max((max(c.size for c in chs) for _, chs in segs if any(c.c.isalpha() for c in chs)), default=0)
+        for ln_y, chars in segs:
+            if not meta["title"] and big >= 14 and max(c.size for c in chars) >= big - 0.1 and any(c.c.isalpha() for c in chars):
+                meta["title"] = re.sub(r"\s+", " ", " ".join(token_text(t) for t in cluster_text(chars, 3.0)))
+        for ln_y, chars in segs:
             line = token_text(sorted(chars, key=lambda c: c.x0)).strip()
             line = re.sub(r"\s+", " ", " ".join(token_text(t) for t in cluster_text(chars, 3.0)))
             sizes = [c.size for c in chars]
@@ -1105,12 +1336,17 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
                 meta["lyricist"] = re.sub(r"^(sł\.|sl\.|słowa:?)\s*", "", line, flags=re.I).strip()
             elif low.startswith("muz.") or low.startswith("muzyka"):
                 meta["composer"] = re.sub(r"^(muz\.|muzyka:?)\s*", "", line, flags=re.I).strip()
+            elif meta["title"] and line == meta["title"]:
+                continue
             elif max(sizes) >= 14 and not meta["title"]:
                 meta["title"] = line
-            elif max(sizes) >= 12 and meta["title"] and not meta.get("subtitle"):
+            elif max(sizes) >= 12 and meta["title"] and not meta.get("subtitle") and not re.search(r"=\s*\d", line) \
+                    and abs((min(c.x0 for c in chars) + max(c.x1 for c in chars)) / 2 - page_w / 2) < page_w * 0.15:
                 meta["subtitle"] = line
             elif re.search(r"=\s*\d{2,3}", line):
                 continue
+            elif low.startswith("arr.") or low.startswith("opr.") or low.startswith("aranż"):
+                meta["arranger"] = line
             elif min(c.x0 for c in chars) > page_w * 0.6 and not meta.get("composer"):
                 meta["composer"] = line   # autor wyrównany do prawej, jak w szablonach programów nutowych
 
@@ -1204,6 +1440,7 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
 
     # 2) lyrics: the lyric font, below the staff they belong to
     lyric_chars = {}
+    maybe_chars = {}
     if lyric_size:
         for t in zone:
             if id(t) in used or "oblique" in t.font.lower():
@@ -1215,10 +1452,39 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
                     below = [o for o in staves if o.top > st.bottom]
                     nxt = min(below, key=lambda o: o.top) if below else None
                     if nxt is not None:
-                        if t.y > nxt.top - 2.2 * st.sp:
-                            continue   # an instruction above the next staff, not lyrics
+                        logic_tight = pno in RECT_REST_PAGES and t.y < nxt.top - 0.2 * st.sp \
+                            and SYSTEM_OF.get(id(nxt)) == SYSTEM_OF.get(id(st))
+                        if t.y > nxt.top - 2.2 * st.sp and not logic_tight:
+                            maybe_chars.setdefault(id(st), []).append(t)
+                            continue   # an instruction above the next staff — unless it lines up with notes (below)
+                        # (Logic sets lyrics right on top of the next staff of the system)
                     lyric_chars.setdefault(id(st), []).append(t)
                     used.add(id(t))
+
+        # rows pushed down next to the following staff (e.g. by a dynamic): lyrics when the syllables stand
+        # under notes of the staff above
+        def under_notes(st, rc):
+            heads_x = [e.x for m in page_measures if m.staff is st for e in m.events if not e.rest]
+            toks = [tk for tk in cluster_text(rc, lyric_size * 0.3, by_span=True) if any(c.c.isalpha() for c in tk)]
+            if not heads_x or len(toks) < 2:
+                return False   # pojedyncze słowo przy pięciolinii to raczej dopisek („tenor”, „solo”)
+            labels = {"sopran", "soprano", "alt", "alto", "tenor", "bas", "bass", "baryton", "solo", "tutti",
+                      "chór", "wszyscy", "unisono", "unison", "men", "women", "all", "mezzo"}
+            if any(token_text(tk).strip(" .:,").lower() in labels for tk in toks):
+                return False
+            # syllable centred under the head, or (melisma "aaa___") starting at it
+            ok = sum(1 for tk in toks
+                     if min(min(abs((tk[0].x0 + tk[-1].x1) / 2 - hx - 0.6 * st.sp), abs(tk[0].x0 - hx))
+                            for hx in heads_x) < 2.5 * st.sp)
+            return ok >= max(1, 0.7 * len(toks))
+
+        for sid, chars in maybe_chars.items():
+            st = next(o for o in staves if id(o) == sid)
+            for ry, rc in group_lines(chars, 2.0):
+                if under_notes(st, rc):
+                    for c in rc:
+                        lyric_chars.setdefault(sid, []).append(c)
+                        used.add(id(c))
 
         # Verse rows directly below one another; a row standing far from the previous one
         # (e.g. "sopran" above the next system) is not lyrics.
@@ -1227,7 +1493,14 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
             rows = sorted(group_lines(chars, 2.0), key=lambda r: r[0])
             keep, last = [], None
             for ry, rc in rows:
-                ok = (ry - st.bottom <= 8 * st.sp) if last is None else (ry - last <= lyric_size * 1.9)
+                ok = (ry - st.bottom <= 8 * st.sp or (ry - st.bottom <= 11 * st.sp and under_notes(st, rc))) \
+                    if last is None else (ry - last <= lyric_size * 1.9)
+                letters = [c.c for c in rc if c.c.isalpha()]
+                if letters and all(ch.isupper() for ch in letters) and len(letters) <= 8:
+                    # "REF.", "ZWR", "CODA" between the staff and the verses — a marker, not a verse row
+                    for c in rc:
+                        used.discard(id(c))
+                    continue
                 if ok and any(c.c.isalpha() for c in rc):
                     keep += rc
                     last = ry
@@ -1301,10 +1574,37 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
                     if abs((e.x + e.x1) / 2 - cx) > 6 * s.sp:
                         warn.add(f"Sylaba „{sy['t']}” bez nuty nad nią (str. {pno + 1})")
                         continue
-                    e.lyrics[verse] = (sy["t"], sy["syl"])
+                    t_ = re.sub(r"^\d+\.\s*", "", sy["t"]).lstrip(".").strip() or sy["t"]
+                    e.lyrics[verse] = (t_, sy["syl"])
 
     # --- chords
+    # a spaced-out heading such as "Z A K O Ń C Z E N I E" breaks into chord-like pieces: if a line of
+    # chord candidates has pieces that are not chords and together they form one word → it is text
+    lines_ = {}
     for grp in chord_groups:
+        lines_.setdefault(round(grp[0].y / 2.0), []).append(grp)
+    skip = set()
+    for key_, gl in lines_.items():
+        if len(gl) < 2 or all(parse_chord(chord_text(g)) for g in gl):
+            continue
+        gl.sort(key=lambda g: g[0].x0)
+        word = "".join(chord_text(g) for g in gl).replace(" ", "")
+        spans_ = {c.span for g in gl for c in g}
+        if len(spans_) == 1:      # cały napis to jeden fragment tekstu w PDF — bierzemy go w całości
+            sp_id = spans_.pop()
+            word = "".join(c.c for c in sorted((c for c in texts if c.span == sp_id), key=lambda c: c.x0)).strip()
+        if len(word) >= 4 and word.replace(" ", "").isalpha() and word.isupper():
+            sd = gl[0][0]
+            st = staff_below(sd.y)
+            ms = [m for m in page_measures if m.staff is st] if st is not None else []
+            if ms:
+                xc = sd.x0
+                meas = next((m for m in ms if m.x0 <= xc < m.x1), None) or (ms[-1] if xc >= ms[-1].x0 else ms[0])
+                meas.words.append(word)
+            skip.update(id(g) for g in gl)
+    for grp in chord_groups:
+        if id(grp) in skip:
+            continue
         txt = chord_text(grp)
         sd = grp[0]
         st = staff_below(sd.y)
@@ -1352,6 +1652,11 @@ def attach_text(page, pno, texts, rects, staves, all_measures, meta, warn, polys
                 stop_m.ending_stop = (num, "stop" if hooked else "discontinue")
             elif meta.get("title") and txt.lower() == meta["title"].lower():
                 continue   # running header with the title on later pages
+            elif re.fullmatch(r"=\s*(\d{2,3})", txt):
+                meas.tempo = int(re.search(r"\d+", txt).group())   # „♩ = 96” (nuta jest znakiem nutowym)
+            elif re.match(r"^(muz\.|sł\.|sl\.|słowa|muzyka|arr\.|opr\.)", txt.lower()) \
+                    or txt in (meta.get("composer"), meta.get("lyricist"), meta.get("arranger")):
+                continue   # autorzy z nagłówka
             elif len(txt) > 1 and not re.fullmatch(r"[\d\W]+", txt):
                 meas.words.append(txt)
 
@@ -1425,6 +1730,115 @@ def attach_harmony(meas: Measure, chord: Chord, x: float, x1: float, staff: Staf
 
 
 # --------------------------------------------------------------------------- final processing and MusicXML
+
+def stem_dir(e):
+    if e.rest or e.stem is None or not e.heads:
+        return 0
+    hy = sum(y for y, _ in e.heads) / len(e.heads)
+    return -1 if (e.stem.y0 + e.stem.y1) / 2 < hy else 1     # -1 = laska w górę
+
+
+def split_voices(m: Measure, expected: F):
+    """Two voices on one staff (closed SA/TB score): stems up = voice 1, stems down = voice 2.
+    A chord with one stem and nothing else sounding at that moment is shared by both voices — its top
+    notes go to voice 1 and the bottom note to voice 2. A voice that starts later in the measure gets a
+    leading rest. Returns True when both voices fill the measure."""
+    evs = [e for e in m.events if not e.cue]
+    st = m.staff
+    mid = st.mid if st else None
+    sp = st.sp if st else 5.0
+    both_dirs = any(stem_dir(e) == 1 for e in evs) and any(stem_dir(e) == -1 for e in evs)
+    # albo dwie pauzy jedna nad drugą (głos 1 wyżej, głos 2 niżej) — reszta taktu może być unisono
+    rest_pair = any(a is not b and a.rest and b.rest and abs(a.x - b.x) < 1.0 * sp
+                    and a.ry is not None and b.ry is not None and abs(a.ry - b.ry) > 1.0 * sp
+                    for a in evs for b in evs)
+    if not (both_dirs or rest_pair):
+        return False
+
+    def assign(strict):
+        v1, v2 = [], []
+        for e in evs:
+            d = stem_dir(e)
+            if e.rest:
+                ry = e.ry
+                if ry is not None and mid is not None and ry < mid - 0.6 * sp:
+                    v1.append(e)
+                elif ry is not None and mid is not None and ry > mid + 0.6 * sp:
+                    v2.append((e, None))
+                else:
+                    v1.append(e)
+                    v2.append((e, "copy"))
+                continue
+            partner = any(o is not e and (o.rest or stem_dir(o) == -d) and abs(o.x - e.x) < 1.6 * sp for o in evs)
+            if d != 0 and (partner or (strict and len(e.pitches) < 2)):
+                (v1.append(e) if d == -1 else v2.append((e, None)))
+            elif len(e.pitches) >= 2:
+                v1.append(e)
+                v2.append((e, "low"))
+            else:
+                v1.append(e)
+                v2.append((e, "copy"))
+        return v1, v2
+
+    def realise(v1, v2spec):
+        out2 = []
+        for e, how in v2spec:
+            if how is None:
+                out2.append(e)
+            elif how == "copy":
+                out2.append(dc_replace(e, v2=True, lyrics={}, harmonies=[], ties_in=set(), ties_out=set(e.ties_out)))
+            else:
+                ps = sorted(e.pitches, key=lambda p: p[4] if len(p) > 4 else 0)
+                low = ps[0]
+                out2.append(dc_replace(e, v2=True, pitches=[low], lyrics={}, harmonies=[],
+                                       ties_out={0} if e.pitches.index(low) in e.ties_out else set(), ties_in=set()))
+        return out2
+
+    def pad(va, vb):
+        """vb starts later than va: leading rest = onset of the va event standing at vb's first x."""
+        tb = sum((e.dur for e in vb), F(0))
+        if not vb or tb >= expected:
+            return vb
+        first_x = min(e.x for e in vb)
+        t, onset = F(0), None
+        for e in sorted(va, key=lambda e: e.x):
+            if abs(e.x - first_x) < 1.6 * sp:
+                onset = t
+                break
+            t += e.dur
+        if onset is not None and onset == expected - tb and onset > 0:
+            r = Event(x=first_x - 0.1, x1=first_x - 0.1, rest=True, base=onset, dur=onset)
+            return [r] + vb
+        # vb ends early (e.g. a half note in voice 2 under four quarters in voice 1): rest at the end
+        last_x = max(e.x for e in vb)
+        t = F(0)
+        for e in sorted(va, key=lambda e: e.x):
+            if t == tb and e.x > last_x + 0.5:
+                r = Event(x=e.x - 0.1, x1=e.x - 0.1, rest=True, base=expected - tb, dur=expected - tb)
+                return vb + [r]
+            t += e.dur
+        return vb
+
+    for strict in (True, False):
+        v1, spec = assign(strict)
+        lows = [e for e, how in spec if how == "low"]
+        v2 = realise(v1, spec)
+        v1 = sorted(v1, key=lambda e: e.x)
+        v2 = sorted(v2, key=lambda e: e.x)
+        v2 = pad(v1, v2)
+        v1 = pad(v2, v1)
+        if sum((e.dur for e in v1), F(0)) == expected and sum((e.dur for e in v2), F(0)) == expected:
+            for e in lows:      # wspólny akord: w głosie 1 zostają górne nuty
+                ps = sorted(e.pitches, key=lambda p: p[4] if len(p) > 4 else 0)
+                e.pitches = [p for p in e.pitches if p is not ps[0]]
+            for e in v2:
+                e.v2 = True
+            for e in v1:
+                e.v2 = False
+            m.events = v1 + v2 + [e for e in m.events if e.cue]
+            return True
+    return False
+
 
 def finish_part(measures: list[Measure], warn: Warnings, label=None):
     tag = f"{label}, takt" if label else "Takt"
@@ -1514,14 +1928,21 @@ def finish_part(measures: list[Measure], warn: Warnings, label=None):
                 new_p.append((step, octv, alter, show, d, hy))
             e.pitches = new_p
 
-        normal = [e for e in m.events if not e.cue]
-        cues = [e for e in m.events if e.cue]
-        m.two_voices = bool(normal) and bool(cues)
-        if not m.two_voices:
-            for e in m.events:
-                e.cue = False
+        split = False
+        if sum((e.dur for e in m.events if not e.cue), F(0)) != expected:
+            split = split_voices(m, expected)
+        if split:
+            m.two_voices = True
+            normal = [e for e in m.events if not e.v2 and not e.cue]
+        else:
+            normal = [e for e in m.events if not e.cue]
+            cues = [e for e in m.events if e.cue]
+            m.two_voices = bool(normal) and bool(cues)
+            if not m.two_voices:
+                for e in m.events:
+                    e.cue = False
         total = sum((e.dur for e in (normal if m.two_voices else m.events)), F(0))
-        if m.two_voices:
+        if m.two_voices and not split:
             t2 = sum((e.dur for e in cues), F(0))
             if t2 != expected:
                 warn.add(f"{tag} {len(out_measures) + 1} (nuty instrumentalne): długość {fmt_dur(t2)} zamiast {fmt_dur(expected)}")
@@ -1592,6 +2013,8 @@ def write_xml(parts: list, names: list, meta, divisions: int) -> str:
         w(f'    <creator type="composer">{escape(meta["composer"])}</creator>')
     if meta.get("lyricist"):
         w(f'    <creator type="lyricist">{escape(meta["lyricist"])}</creator>')
+    if meta.get("arranger"):
+        w(f'    <creator type="arranger">{escape(meta["arranger"])}</creator>')
     w(f'    <encoding><software>Nuty → MusicXML, czytnik wektorowy {VERSION}</software>'
       '<supports element="accidental" type="yes"/><supports element="beam" type="no"/>'
       '<supports element="stem" type="no"/></encoding>')
@@ -1644,6 +2067,11 @@ def write_part(w, measures, meta, divisions):
             w('      <attributes>' + "".join(attrs) + '</attributes>')
         for r in m.rehearsal:
             w(f'      <direction placement="above"><direction-type><rehearsal enclosure="rectangle">{escape(r)}</rehearsal></direction-type></direction>')
+        if m.tempo:
+            t = m.tempo
+            w(f'      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit>'
+              f'<per-minute>{t}</per-minute></metronome></direction-type><sound tempo="{t}"/></direction>')
+            tempo_done = True
         if not tempo_done and meta.get("tempo"):
             t = meta["tempo"]
             w(f'      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit>'
@@ -1653,7 +2081,8 @@ def write_part(w, measures, meta, divisions):
             w(f'      <direction placement="above"><direction-type><words>{escape(wd)}</words></direction-type></direction>')
 
         if getattr(m, "two_voices", False):
-            layers = [(1, [e for e in m.events if not e.cue]), (2, [e for e in m.events if e.cue])]
+            layers = [(1, [e for e in m.events if not e.cue and not e.v2]),
+                      (2, [e for e in m.events if e.cue or e.v2])]
         else:
             layers = [(1, m.events)]
         for li, (voice, evs) in enumerate(layers):
@@ -1686,7 +2115,11 @@ def write_event(w, e: Event, voice: int, divisions: int):
         w('      <note>' + ('<cue/>' if cue else '') + f'<rest{mr}/>'
           + f'<duration>{dur}</duration><voice>{voice}</voice>'
           + (f'<type{size}>{typ}</type>' if typ and not e.measure_rest else '')
-          + '<dot/>' * (e.dots if not e.measure_rest else 0) + '</note>')
+          + '<dot/>' * (e.dots if not e.measure_rest else 0)
+          + (f'<time-modification><actual-notes>{e.tuplet[0]}</actual-notes><normal-notes>{e.tuplet[1]}</normal-notes></time-modification>' if e.tuplet else '')
+          + ('<notations>' + ('<tuplet type="start" bracket="yes"/>' if e.tuplet_pos in ("start", "single") else '')
+             + ('<tuplet type="stop"/>' if e.tuplet_pos in ("stop", "single") else '') + '</notations>' if e.tuplet_pos else '')
+          + '</note>')
         return
     for k, p in enumerate(e.pitches):
         parts = ['      <note>']
@@ -1713,6 +2146,9 @@ def write_event(w, e: Event, voice: int, divisions: int):
         if len(p) != 4 and p[3]:
             acc = {1: "sharp", -1: "flat", 0: "natural", 2: "double-sharp", -2: "flat-flat"}[p[2]]
             parts.append(f'<accidental>{acc}</accidental>')
+        if e.tuplet:
+            parts.append(f'<time-modification><actual-notes>{e.tuplet[0]}</actual-notes>'
+                         f'<normal-notes>{e.tuplet[1]}</normal-notes></time-modification>')
         if e.slash:
             parts.append('<stem>none</stem><notehead>slash</notehead>')
         elif e.xhead:
@@ -1722,6 +2158,10 @@ def write_event(w, e: Event, voice: int, divisions: int):
             notations.append('<tied type="stop"/>')
         if k in e.ties_out:
             notations.append('<tied type="start"/>')
+        if k == 0 and e.tuplet_pos in ("start", "single"):
+            notations.append('<tuplet type="start" bracket="yes"/>')
+        if k == 0 and e.tuplet_pos in ("stop", "single"):
+            notations.append('<tuplet type="stop"/>')
         if notations:
             parts.append('<notations>' + "".join(notations) + '</notations>')
         if k == 0:

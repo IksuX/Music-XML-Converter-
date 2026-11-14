@@ -1,4 +1,4 @@
-# Nuty → MusicXML 0.5.1
+# Nuty → MusicXML 0.5.2
 
 Aplikacja na macOS do zamiany PDF-ów, skanów i zdjęć nut na pliki **MusicXML** (`.musicxml`). Takie pliki otworzysz w MuseScore, Sibeliusie, Finale, Dorico albo Logicu.
 
@@ -7,7 +7,7 @@ Aplikacja na macOS do zamiany PDF-ów, skanów i zdjęć nut na pliki **MusicXML
 **1. PDF z programu nutowego (Finale, Sibelius, MuseScore, Dorico…) — odczyt bezpośredni.**
 Taki PDF nie jest obrazkiem: każda nuta, pauza, belka i łuk są w nim zapisane z dokładnym położeniem, a tekst i akordy jako zwykły tekst. Aplikacja czyta je wprost z pliku, więc wynik jest wierny oryginałowi: rytm, wysokości, tonacja, powtórki i wolty, tekst pod nutami (z łącznikami i polskimi znakami), akordy (także z basem, np. `E/G#`), oznaczenia `ZWR`/`REF`, tytuł, autorzy i tempo. Działa automatycznie — jeśli PDF okaże się skanem, aplikacja sama przełącza się na rozpoznawanie obrazu. Po odczycie aplikacja sprawdza długość każdego taktu i zgłasza w logu te, które nie pasują do metrum.
 
-Obsługiwane są PDF-y z Finale (czcionka Maestro, np. materiały CSM) oraz z MuseScore, Dorico i nowszego Finale/Sibeliusa (czcionki SMuFL: Leland, Bravura, Petaluma…). Działa zarówno dla pojedynczej linii melodycznej, jak i dla partytur chóralnych na kilka głosów — także gdy program ukrył puste pięciolinie w części systemów (wtedy w MusicXML są tam pauzy). Głosy nazywają się „Głos 1, 2, 3…” od góry; przypisanie pięciolinii do głosu aplikacja ustala po kolejności i kluczu (np. klucz wiolinowy z ósemką = głos męski), więc przy partyturach, które zaczynają się od jednej pięciolinii, warto rzucić okiem na początek.
+Obsługiwane są PDF-y z Finale (czcionka Maestro, np. materiały CSM), z MuseScore, Dorico i nowszego Finale/Sibeliusa (czcionki SMuFL: Leland, Bravura, Petaluma…) oraz z Logic Pro. Działa zarówno dla pojedynczej linii melodycznej, jak i dla partytur chóralnych na kilka głosów — także gdy program ukrył puste pięciolinie w części systemów (wtedy w MusicXML są tam pauzy). Głosy nazywają się „Głos 1, 2, 3…” od góry; przypisanie pięciolinii do głosu aplikacja ustala po kolejności i kluczu (np. klucz wiolinowy z ósemką = głos męski), więc przy partyturach, które zaczynają się od jednej pięciolinii, warto rzucić okiem na początek.
 
 Jeśli odczyt bezpośredni wyjdzie niewiarygodny (np. PDF z programu, którego znaki są nieznane), aplikacja nie zapisze błędnego pliku, tylko sama przełączy się na Audiveris. Fortepian (pięciolinia z dwoma głosami w jednej, akordy w obu rękach z różnymi rytmami) jest odczytywany, ale do sprawdzenia.
 

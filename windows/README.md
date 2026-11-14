@@ -1,4 +1,4 @@
-# Nuty → MusicXML 0.5.0 — Windows
+# Nuty → MusicXML 0.5.2 — Windows
 
 Wersja na Windows 10/11 (64-bit) aplikacji do zamiany PDF-ów, skanów i zdjęć nut na **MusicXML**. Umie to samo co wersja na Maca:
 

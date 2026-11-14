@@ -1,7 +1,7 @@
 ; Inno Setup 6 — instalator Nuty → MusicXML
 ; iscc /DAppVersion=0.4.1 installer\NutyMusicXML.iss
 #ifndef AppVersion
-  #define AppVersion "0.5.0"
+  #define AppVersion "0.5.2"
 #endif
 
 [Setup]

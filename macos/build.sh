@@ -4,7 +4,7 @@
 #   ./build.sh --install  → buduje i kopiuje do /Applications
 set -euo pipefail
 
-VERSION="0.5.1"
+VERSION="0.5.2"
 APP_NAME="Nuty MusicXML"
 EXE="NutyMusicXML"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
